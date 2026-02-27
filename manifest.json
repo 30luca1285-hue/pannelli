@@ -1,0 +1,18 @@
+{
+  "name": "Pannelli Solari",
+  "short_name": "Pannelli",
+  "description": "Dashboard inverter solare Delios — Azienda Agraria Galluzzi",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0A1628",
+  "theme_color": "#F5A623",
+  "lang": "it",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

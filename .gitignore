@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+
+# clasp / Apps Script (backend — gestito separatamente)
+.clasp.json
+*.gs
+appsscript.json
+
+# Claude
+.claude/
