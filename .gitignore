@@ -3,8 +3,11 @@
 
 # clasp / Apps Script (backend — gestito separatamente)
 .clasp.json
+.claspignore
 *.gs
+*.html.bak
 appsscript.json
+Dashboard.html
 
 # Claude
 .claude/
