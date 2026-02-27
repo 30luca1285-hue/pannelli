@@ -200,7 +200,6 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <button class="tab" onclick="switchTab('overview')">Overview</button>
 <button class="tab" onclick="switchTab('mensile')">Mensile</button>
 <button class="tab" onclick="switchTab('confronto')">Confronto Anni</button>
-<button class="tab" onclick="switchTab('setup')">Setup API</button>
 </div>
 
 <!-- LIVE INVERTER -->
@@ -251,8 +250,8 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <!-- MENSILE -->
 <div id="tab-mensile" class="panel">
 <div class="year-pills" id="yearPills"></div>
-<div class="chart-card" style="margin-bottom:20px;"><h3 id="mensileTitle">Dettaglio Mensile</h3><div class="chart-sub">Produzione · Autoconsumo · Immessa in rete · Bolletta kWh</div><div class="chart-wrapper"><canvas id="chartMensile" height="240"></canvas></div></div>
-<div class="chart-card"><div style="overflow-x:auto;"><table class="data-table" id="tableMensile"><thead><tr><th>Mese</th><th class="num">Produzione FV</th><th class="num">Autoconsumo</th><th class="num">Immessa rete</th><th class="num">Da rete</th><th class="num">Bolletta kWh</th><th class="num">€/kWh</th><th class="num">Costo €</th></tr></thead><tbody id="tbodyMensile"></tbody></table></div></div>
+<div class="chart-card" style="margin-bottom:20px;"><h3 id="mensileTitle">Dettaglio Mensile</h3><div class="chart-sub">Produzione · Autoconsumo · Immessa in rete · Da rete — <span style="color:var(--green);font-size:10px;">● auto da inverter</span></div><div class="chart-wrapper"><canvas id="chartMensile" height="240"></canvas></div></div>
+<div class="chart-card"><div style="overflow-x:auto;"><table class="data-table" id="tableMensile"><thead><tr><th>Mese</th><th class="num">Produz. FV</th><th class="num">Autocons.</th><th class="num">Immessa</th><th class="num">Da rete</th><th class="num">Bolletta €</th><th class="num">GSE €</th><th class="num">Netto €</th></tr></thead><tbody id="tbodyMensile"></tbody></table></div></div>
 </div>
 
 <!-- CONFRONTO -->
@@ -261,21 +260,6 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div class="chart-row cols-2" style="margin-top:20px;"><div class="chart-card"><h3>Produzione Mensile per Anno</h3><div class="chart-sub">kWh — confronto stagionale</div><div class="chart-wrapper"><canvas id="chartConfronto" height="260"></canvas></div></div><div class="chart-card"><h3>Costo €/kWh per Anno</h3><div class="chart-sub">Evoluzione prezzi energia</div><div class="chart-wrapper"><canvas id="chartCostoAnno" height="260"></canvas></div></div></div>
 </div>
 
-<!-- SETUP API -->
-<div id="tab-setup" class="panel">
-<div class="setup-grid">
-<div>
-<div class="setup-card" style="margin-bottom:20px;"><h3>🔌 Architettura — API Cloud Delios</h3>
-<p style="font-family:'Space Mono',monospace;font-size:11px;color:var(--text-dim);line-height:1.8;margin-bottom:12px;">Reverse engineering del portale <strong style="color:var(--sun)">webportal.delios-srl.it</strong>. Google Apps Script chiama le API REST del backend Delios ogni 15 minuti.</p>
-<div style="background:rgba(0,0,0,0.3);border-radius:10px;padding:16px;border:1px solid var(--border);"><div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--text-dim);margin-bottom:8px;">ARCHITETTURA</div><div style="font-family:'Space Mono',monospace;font-size:12px;line-height:2.2;"><span style="color:var(--sun)">Inverter Delios</span> (a casa)<br><span style="color:var(--text-dim)">↓ WiFi → cloud Delios</span><br><span style="color:var(--blue)">webportal-backend.delios-srl.it</span><br><span style="color:var(--text-dim)">↓ API REST + JWT auth</span><br><span style="color:var(--green)">Google Apps Script</span> (trigger ogni 15 min)<br><span style="color:var(--text-dim)">↓ scrive su</span><br><span style="color:var(--sun)">Google Sheets → Dashboard</span></div></div></div>
-<div class="setup-card"><h3>📡 API Endpoints</h3><div class="code-block"><span class="code-comment">// Autenticazione</span><br>POST <span class="code-str">/authenticate</span><br>Body: <span class="code-val">{"email":"...","password":"..."}</span><br>→ Token JWT (30 giorni)<br><br><span class="code-comment">// Dati real-time</span><br>POST <span class="code-str">/machine_logs/get_machine_log_general</span><br>Body: <span class="code-val">{"plant_id":1463,"machine_id":""}</span><br>→ powerpv, powergrid, powerhouse, battery...<br><br><span class="code-comment">// Trend storici</span><br>POST <span class="code-str">/machine_logs/get_machine_log_trend</span><br>→ type: day, week, month, year</div></div>
-</div>
-<div>
-<div class="setup-card" style="margin-bottom:20px;"><h3>⚙️ Setup in 3 passi</h3><ul class="step-list"><li class="step-item"><div class="step-num">1</div><div class="step-content"><div class="step-title">Copia DeliosAPI.gs</div><div class="step-desc">Google Sheets → Estensioni → Apps Script → Nuovo file "DeliosAPI.gs"</div></div></li><li class="step-item"><div class="step-num">2</div><div class="step-content"><div class="step-title">Configura credenziali</div><div class="step-desc">In getConfig() inserisci la tua password Delios.</div></div></li><li class="step-item"><div class="step-num">3</div><div class="step-content"><div class="step-title">Esegui setupDelios()</div><div class="step-desc">Creerà i fogli e imposterà trigger automatici ogni 15 min.</div></div></li></ul><div class="info-box">ℹ️ Dopo il setup, un menu "☀️ Delios Solar" apparirà in Google Sheets.</div></div>
-<div class="setup-card"><h3>📊 Fogli creati</h3><ul class="step-list"><li class="step-item"><div class="step-num">L</div><div class="step-content"><div class="step-title">Delios_Live</div><div class="step-desc">Ultimo valore di ogni parametro. Aggiornato ogni 15 min.</div></div></li><li class="step-item"><div class="step-num">S</div><div class="step-content"><div class="step-title">Delios_Storico</div><div class="step-desc">Log ogni 15 min. Max 10.000 righe (~100 giorni).</div></div></li><li class="step-item"><div class="step-num">G</div><div class="step-content"><div class="step-title">Delios_Giornaliero</div><div class="step-desc">Riepilogo giornaliero creato alle 23:50.</div></div></li></ul><div class="warn-box">⚠️ Token JWT dura 30 giorni. Rinnovo automatico.</div></div>
-</div>
-</div>
-</div>
 
 </div>
 <script>
@@ -392,22 +376,129 @@ new Chart(document.getElementById('chartCosto'),{type:'line',data:{labels:rawDat
 const d2024=rawData.filter(d=>d[0]===2024);const auto2024=d2024.reduce((s,d)=>s+d[6],0);const imm2024=d2024.reduce((s,d)=>s+d[5],0);
 new Chart(document.getElementById('chartDonut'),{type:'doughnut',data:{labels:['Autoconsumo','Immessa in rete'],datasets:[{data:[Math.round(auto2024),Math.round(imm2024)],backgroundColor:['#2ECC71','#3498DB'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#7A8BA8',font:{family:'Space Mono',size:10},padding:16}}}}});
 
-let selectedYear=2025;let chartMensileInst=null;
-function buildYearPills(){const c=document.getElementById('yearPills');c.innerHTML='';anni.forEach(a=>{const btn=document.createElement('button');btn.className='year-pill'+(a===selectedYear?' active':'');btn.textContent=a;btn.onclick=()=>{selectedYear=a;buildYearPills();renderMensile();};c.appendChild(btn);});}
+let selectedYear = new Date().getFullYear();
+let chartMensileInst = null;
+let apiMonthlyData = null;
 
-function renderMensile(){
-const dati=rawData.filter(d=>d[0]===selectedYear);
-document.getElementById('mensileTitle').textContent=`Dettaglio ${selectedYear}`;
-if(chartMensileInst)chartMensileInst.destroy();
-chartMensileInst=new Chart(document.getElementById('chartMensile'),{type:'bar',data:{labels:dati.map(d=>d[1]),datasets:[{label:'Produzione FV',data:dati.map(d=>d[2]),backgroundColor:'rgba(245,166,35,0.7)',borderRadius:4},{label:'Autoconsumo',data:dati.map(d=>d[6]),backgroundColor:'rgba(46,204,113,0.7)',borderRadius:4},{label:'Immessa',data:dati.map(d=>d[5]),backgroundColor:'rgba(52,152,219,0.5)',borderRadius:4},{label:'Da rete',data:dati.map(d=>d[3]),backgroundColor:'rgba(231,76,60,0.4)',borderRadius:4}]},options:chartOpts});
-
-const tbody=document.getElementById('tbodyMensile');tbody.innerHTML='';
-let totProd=0,totAuto=0,totImm=0,totRete=0,totBoll=0,totCosto=0;
-dati.forEach(d=>{totProd+=d[2];totAuto+=d[6];totImm+=d[5];totRete+=d[3];totBoll+=d[8];totCosto+=d[9];const tr=document.createElement('tr');tr.innerHTML=`<td>${d[1]}</td><td class="num warn">${d[2]}</td><td class="num good">${d[6]}</td><td class="num" style="color:var(--blue)">${d[5]}</td><td class="num">${Math.round(d[3])}</td><td class="num">${d[8]}</td><td class="num">€${d[10].toFixed(3)}</td><td class="num">€${d[9].toFixed(0)}</td>`;tbody.appendChild(tr);});
-const trTot=document.createElement('tr');trTot.style.fontWeight='700';trTot.style.borderTop='2px solid rgba(245,166,35,0.3)';trTot.innerHTML=`<td style="color:var(--sun)">TOTALE ${selectedYear}</td><td class="num warn">${Math.round(totProd)}</td><td class="num good">${Math.round(totAuto)}</td><td class="num" style="color:var(--blue)">${Math.round(totImm)}</td><td class="num">${Math.round(totRete)}</td><td class="num">${Math.round(totBoll)}</td><td class="num">€${(totCosto/dati.length).toFixed(3)} avg</td><td class="num">€${Math.round(totCosto)}</td>`;tbody.appendChild(trTot);
+// --- Bolletta / GSE persistence (localStorage) ---
+function getMensileSaved() {
+  return JSON.parse(localStorage.getItem('mensile') || '{}');
+}
+function saveMensileInput(key, field, value) {
+  const saved = getMensileSaved();
+  if (!saved[key]) saved[key] = { bolletta: 0, gse: 0 };
+  saved[key][field] = parseFloat(value) || 0;
+  localStorage.setItem('mensile', JSON.stringify(saved));
+  renderMensile();
 }
 
-buildYearPills();renderMensile();
+// --- Year pills (include anni da API) ---
+function buildYearPills() {
+  const apiYears = apiMonthlyData ? apiMonthlyData.map(d => d.anno) : [];
+  const allYears = [...new Set([...anni, ...apiYears])].sort();
+  const c = document.getElementById('yearPills');
+  c.innerHTML = '';
+  allYears.forEach(a => {
+    const btn = document.createElement('button');
+    btn.className = 'year-pill' + (a === selectedYear ? ' active' : '');
+    btn.textContent = a;
+    btn.onclick = () => { selectedYear = a; buildYearPills(); renderMensile(); };
+    c.appendChild(btn);
+  });
+}
+
+// --- Render mensile: rawData + API merge + bolletta/GSE inputs ---
+function renderMensile() {
+  const saved = getMensileSaved();
+
+  // Converti rawData storico in oggetti per l'anno selezionato
+  // rawData: [anno, mese, produzione, da_rete, ?, immessa, autoconsumo, ?, bollettaKwh, costo€, €/kWh]
+  const historical = {};
+  rawData.filter(d => d[0] === selectedYear).forEach(d => {
+    const key = d[0] + '-' + d[1];
+    historical[key] = { anno: d[0], mese: d[1], produzione: d[2], da_rete: Math.round(d[3]), immessa: d[5], autoconsumo: d[6], bolletta: d[9], gse: 0, fromAPI: false };
+  });
+
+  // Sovrascrivi / aggiungi mesi da API Delios_Giornaliero
+  if (apiMonthlyData) {
+    apiMonthlyData.filter(d => d.anno === selectedYear).forEach(d => {
+      const key = d.anno + '-' + d.mese;
+      if (historical[key]) {
+        Object.assign(historical[key], { produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, fromAPI: true });
+      } else {
+        historical[key] = { anno: d.anno, mese: d.mese, produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, bolletta: 0, gse: 0, fromAPI: true };
+      }
+    });
+  }
+
+  // Applica bolletta/GSE salvati in localStorage (override su tutto)
+  Object.keys(historical).forEach(key => {
+    if (saved[key]) {
+      if (saved[key].bolletta !== undefined) historical[key].bolletta = saved[key].bolletta;
+      if (saved[key].gse !== undefined) historical[key].gse = saved[key].gse;
+    }
+  });
+
+  // Ordina per mese
+  const dati = Object.values(historical).sort((a, b) => mesiNomi.indexOf(a.mese) - mesiNomi.indexOf(b.mese));
+
+  document.getElementById('mensileTitle').textContent = `Dettaglio ${selectedYear}`;
+  if (chartMensileInst) chartMensileInst.destroy();
+  chartMensileInst = new Chart(document.getElementById('chartMensile'), {
+    type: 'bar',
+    data: { labels: dati.map(d => d.mese), datasets: [
+      { label: 'Produzione FV', data: dati.map(d => d.produzione), backgroundColor: 'rgba(245,166,35,0.7)', borderRadius: 4 },
+      { label: 'Autoconsumo',  data: dati.map(d => d.autoconsumo), backgroundColor: 'rgba(46,204,113,0.7)', borderRadius: 4 },
+      { label: 'Immessa',      data: dati.map(d => d.immessa),     backgroundColor: 'rgba(52,152,219,0.5)', borderRadius: 4 },
+      { label: 'Da rete',      data: dati.map(d => d.da_rete),     backgroundColor: 'rgba(231,76,60,0.4)',  borderRadius: 4 }
+    ]}, options: chartOpts
+  });
+
+  const inpStyle = 'width:62px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-family:\'Space Mono\',monospace;font-size:11px;text-align:right;';
+  const tbody = document.getElementById('tbodyMensile');
+  tbody.innerHTML = '';
+  let totProd=0, totAuto=0, totImm=0, totRete=0, totBoll=0, totGse=0;
+
+  dati.forEach(d => {
+    const key = d.anno + '-' + d.mese;
+    totProd += d.produzione; totAuto += d.autoconsumo; totImm += d.immessa; totRete += d.da_rete;
+    totBoll += d.bolletta;   totGse  += d.gse;
+    const netto = (d.bolletta - d.gse).toFixed(0);
+    const dot = d.fromAPI ? '<span style="color:var(--green);font-size:9px;margin-left:3px;" title="dato inverter">●</span>' : '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${d.mese}${dot}</td>
+      <td class="num warn">${d.produzione}</td>
+      <td class="num good">${d.autoconsumo}</td>
+      <td class="num" style="color:var(--blue)">${d.immessa}</td>
+      <td class="num">${d.da_rete}</td>
+      <td class="num"><input type="number" step="1" min="0" value="${d.bolletta.toFixed(0)}" onchange="saveMensileInput('${key}','bolletta',this.value)" style="${inpStyle}color:var(--text);"></td>
+      <td class="num"><input type="number" step="1" min="0" value="${d.gse.toFixed(0)}" onchange="saveMensileInput('${key}','gse',this.value)" style="${inpStyle}color:var(--green);"></td>
+      <td class="num" style="color:${netto>0?'var(--red)':'var(--green)'}">€${netto}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  const trTot = document.createElement('tr');
+  trTot.style.cssText = 'font-weight:700;border-top:2px solid rgba(245,166,35,0.3)';
+  trTot.innerHTML = `<td style="color:var(--sun)">TOTALE ${selectedYear}</td>
+    <td class="num warn">${Math.round(totProd)}</td>
+    <td class="num good">${Math.round(totAuto)}</td>
+    <td class="num" style="color:var(--blue)">${Math.round(totImm)}</td>
+    <td class="num">${Math.round(totRete)}</td>
+    <td class="num">€${Math.round(totBoll)}</td>
+    <td class="num" style="color:var(--green)">€${Math.round(totGse)}</td>
+    <td class="num">€${Math.round(totBoll - totGse)}</td>`;
+  tbody.appendChild(trTot);
+}
+
+// Fetch monthly API data e re-render
+async function fetchMonthlyAPI() {
+  apiMonthlyData = await gasGet('monthly');
+  buildYearPills();
+  renderMensile();
+}
+
+buildYearPills(); renderMensile();
+fetchMonthlyAPI();
 
 new Chart(document.getElementById('chartConfronto'),{type:'line',data:{labels:mesiNomi,datasets:anni.map(anno=>{const mm={};rawData.filter(d=>d[0]===anno).forEach(d=>mm[d[1]]=d[2]);return{label:anno.toString(),data:mesiNomi.map(m=>mm[m]||null),borderColor:colori[anno],backgroundColor:colori[anno]+'15',tension:0.4,borderWidth:2,pointRadius:3,spanGaps:true,fill:false};})},options:chartOpts});
 
