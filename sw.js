@@ -1,7 +1,7 @@
 const CACHE = 'pannelli-v1';
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
+  '/pannelli/',
+  '/pannelli/index.html',
   'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
 ];
 
