@@ -251,7 +251,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div id="tab-mensile" class="panel">
 <div class="year-pills" id="yearPills"></div>
 <div class="chart-card" style="margin-bottom:20px;"><h3 id="mensileTitle">Dettaglio Mensile</h3><div class="chart-sub">Produzione · Autoconsumo · Immessa in rete · Da rete — <span style="color:var(--green);font-size:10px;">● auto da inverter</span></div><div class="chart-wrapper"><canvas id="chartMensile" height="240"></canvas></div></div>
-<div class="chart-card"><div style="overflow-x:auto;"><table class="data-table" id="tableMensile"><thead><tr><th>Mese</th><th class="num">Produz. FV</th><th class="num">Autocons.</th><th class="num">Immessa</th><th class="num">Da rete</th><th class="num">kWh eff.</th><th class="num">€ Materia</th><th class="num">€/kWh</th><th class="num">Bolletta €</th><th class="num">GSE €</th><th class="num">Netto €</th></tr></thead><tbody id="tbodyMensile"></tbody></table></div></div>
+<div class="chart-card"><div style="overflow-x:auto;"><table class="data-table" id="tableMensile"><thead><tr><th>Mese</th><th class="num">Produz. FV</th><th class="num">Autocons.</th><th class="num">Immessa</th><th class="num">Da rete</th><th class="num">kWh eff.</th><th class="num">€ Materia</th><th class="num">€/kWh</th><th class="num">GSE €</th><th class="num">Netto €</th></tr></thead><tbody id="tbodyMensile"></tbody></table></div></div>
 </div>
 
 <!-- CONFRONTO -->
@@ -482,13 +482,13 @@ function renderMensile() {
   const inpStyle = 'width:62px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-family:\'Space Mono\',monospace;font-size:11px;text-align:right;';
   const tbody = document.getElementById('tbodyMensile');
   tbody.innerHTML = '';
-  let totProd=0, totAuto=0, totImm=0, totRete=0, totBoll=0, totGse=0, totKwhEff=0, totMateria=0;
+  let totProd=0, totAuto=0, totImm=0, totRete=0, totGse=0, totKwhEff=0, totMateria=0;
 
   dati.forEach(d => {
     const key = d.anno + '-' + d.mese;
     totProd += d.produzione; totAuto += d.autoconsumo; totImm += d.immessa; totRete += d.da_rete;
-    totBoll += d.bolletta;   totGse  += d.gse; totKwhEff += d.kwh_eff; totMateria += d.materia;
-    const netto = (d.bolletta - d.gse).toFixed(0);
+    totGse  += d.gse; totKwhEff += d.kwh_eff; totMateria += d.materia;
+    const netto = (d.materia - d.gse).toFixed(0);
     const dot = d.fromAPI ? '<span style="color:var(--green);font-size:9px;margin-left:3px;" title="dato inverter">●</span>' : '';
     const tr = document.createElement('tr');
     const eurokwh = d.kwh_eff > 0 ? (d.materia / d.kwh_eff).toFixed(4) : '—';
@@ -500,7 +500,6 @@ function renderMensile() {
       <td class="num"><input type="number" step="1" min="0" value="${d.kwh_eff||0}" onchange="saveMensileInput('${key}','kwh_eff',this.value)" style="${inpStyle}color:var(--blue);"></td>
       <td class="num"><input type="number" step="0.01" min="0" value="${d.materia?d.materia.toFixed(2):'0'}" onchange="saveMensileInput('${key}','materia',this.value)" style="${inpStyle}color:var(--sun);"></td>
       <td class="num" style="color:var(--sun);font-size:11px;">${eurokwh !== '—' ? '€'+eurokwh : '—'}</td>
-      <td class="num"><input type="number" step="1" min="0" value="${d.bolletta.toFixed(0)}" onchange="saveMensileInput('${key}','bolletta',this.value)" style="${inpStyle}color:var(--text);"></td>
       <td class="num"><input type="number" step="1" min="0" value="${d.gse.toFixed(0)}" onchange="saveMensileInput('${key}','gse',this.value)" style="${inpStyle}color:var(--green);"></td>
       <td class="num" style="color:${netto>0?'var(--red)':'var(--green)'}">€${netto}</td>`;
     tbody.appendChild(tr);
@@ -517,9 +516,8 @@ function renderMensile() {
     <td class="num" style="color:var(--blue)">${Math.round(totKwhEff)}</td>
     <td class="num" style="color:var(--sun)">€${Math.round(totMateria)}</td>
     <td class="num" style="color:var(--sun)">${totEurokwh}</td>
-    <td class="num">€${Math.round(totBoll)}</td>
     <td class="num" style="color:var(--green)">€${Math.round(totGse)}</td>
-    <td class="num">€${Math.round(totBoll - totGse)}</td>`;
+    <td class="num">€${Math.round(totMateria - totGse)}</td>`;
   tbody.appendChild(trTot);
   updateAmmortamento();
 }
