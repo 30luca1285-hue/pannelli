@@ -191,7 +191,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div class="grid-bg"></div>
 <div class="container">
 <header>
-<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v31</span></p></div>
+<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v32</span></p></div>
 <div class="header-meta"><div class="live-badge"><span class="live-dot"></span> <span id="statusBadge">DATI STORICI</span></div><div class="last-update" id="updateTime"></div></div>
 </header>
 
@@ -377,34 +377,24 @@ let apiMonthlyData = null;
 // --- Ammortamento dinamico ---
 function updateAmmortamento() {
   const saved = getMensileSaved();
-  // Mappa rawData per key
-  const rawMap = {};
-  rawData.forEach(d => { rawMap[d[0]+'-'+d[1]] = { autoconsumo: d[6], savBase: d[7] }; });
+  // Baseline storica hardcoded (include risparmi autoconsumo + rimborsi una tantum passati)
+  const BASE = 13688.371;
+  const rawKeys = new Set(rawData.map(d => d[0]+'-'+d[1]));
 
-  let total = 0;
-  // Contributo mesi rawData: uso prezzo reale (materia/kwh_eff) se inserito, altrimenti d[7]
-  Object.keys(rawMap).forEach(key => {
-    const s = saved[key];
-    if (s && s.kwh_eff > 0 && s.materia > 0) {
-      total += rawMap[key].autoconsumo * (s.materia / s.kwh_eff);
-    } else {
-      total += rawMap[key].savBase;
-    }
-    if (s && s.gse > 0) total += s.gse;
-  });
-  // Mesi solo in localStorage (non in rawData: API future/correnti)
+  let extra = 0;
+  // GSE inseriti in localStorage per tutti i mesi (rawData e non)
   Object.keys(saved).forEach(key => {
-    if (!rawMap[key]) {
-      const s = saved[key];
-      if (apiMonthlyData) {
-        const [yr, mes] = key.split('-');
-        const api = apiMonthlyData.find(d => d.anno == yr && d.mese === mes);
-        if (api && s.kwh_eff > 0 && s.materia > 0) total += api.autoconsumo * (s.materia / s.kwh_eff);
-      }
-      if (s.gse > 0) total += s.gse;
+    const s = saved[key];
+    if (s.gse > 0) extra += s.gse;
+    // Per mesi nuovi (non in rawData): aggiungi anche risparmio autoconsumo se si ha il prezzo
+    if (!rawKeys.has(key) && apiMonthlyData && s.kwh_eff > 0 && s.materia > 0) {
+      const [yr, mes] = key.split('-');
+      const api = apiMonthlyData.find(d => d.anno == yr && d.mese === mes);
+      if (api) extra += api.autoconsumo * (s.materia / s.kwh_eff);
     }
   });
 
+  const total = BASE + extra;
   const perc = Math.min(total / INVESTIMENTO * 100, 100).toFixed(1);
   document.getElementById('ammRecov').textContent = `€${Math.round(total).toLocaleString('it-IT')}`;
   document.getElementById('ammRemain').textContent = `€${Math.round(INVESTIMENTO - total).toLocaleString('it-IT')}`;
