@@ -251,7 +251,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div id="tab-mensile" class="panel">
 <div class="year-pills" id="yearPills"></div>
 <div class="chart-card" style="margin-bottom:20px;"><h3 id="mensileTitle">Dettaglio Mensile</h3><div class="chart-sub">Produzione · Autoconsumo · Immessa in rete · Da rete — <span style="color:var(--green);font-size:10px;">● auto da inverter</span></div><div class="chart-wrapper"><canvas id="chartMensile" height="240"></canvas></div></div>
-<div class="chart-card"><div style="overflow-x:auto;"><table class="data-table" id="tableMensile"><thead><tr><th>Mese</th><th class="num">Produz. FV</th><th class="num">Autocons.</th><th class="num">Immessa</th><th class="num">Da rete</th><th class="num">Bolletta €</th><th class="num">GSE €</th><th class="num">Netto €</th></tr></thead><tbody id="tbodyMensile"></tbody></table></div></div>
+<div class="chart-card"><div style="overflow-x:auto;"><table class="data-table" id="tableMensile"><thead><tr><th>Mese</th><th class="num">Produz. FV</th><th class="num">Autocons.</th><th class="num">Immessa</th><th class="num">Da rete</th><th class="num">kWh eff.</th><th class="num">€ Materia</th><th class="num">€/kWh</th><th class="num">Bolletta €</th><th class="num">GSE €</th><th class="num">Netto €</th></tr></thead><tbody id="tbodyMensile"></tbody></table></div></div>
 </div>
 
 <!-- CONFRONTO -->
@@ -340,9 +340,7 @@ const avgAutoPerc=(totalAutocons/(totalProd||1)*100).toFixed(1);
 const bestRow=rawData.reduce((a,b)=>b[2]>a[2]?b:a);
 const avgCost=(rawData.reduce((s,d)=>s+d[10],0)/rawData.length).toFixed(3);
 const latestCost=rawData[rawData.length-1][10];
-const ammortizzato=13688.371;
-const daAmm=INVESTIMENTO-ammortizzato;
-const ammPerc=(ammortizzato/INVESTIMENTO*100).toFixed(1);
+// ammortamento calcolato dinamicamente in updateAmmortamento()
 
 document.getElementById('updateTime').textContent=`Aggiornato: ${new Date().toLocaleString('it-IT')}`;
 document.getElementById('kpi-prod').textContent=Math.round(totalProd).toLocaleString('it-IT');
@@ -355,11 +353,7 @@ document.getElementById('kpi-best-sub').textContent=`${bestRow[1]} ${bestRow[0]}
 document.getElementById('kpi-cost').textContent=`€${avgCost}`;
 document.getElementById('kpi-cost-sub').textContent=`Ora: €${latestCost.toFixed(3)}/kWh`;
 document.getElementById('kpi-months').textContent=rawData.length;
-document.getElementById('ammRecov').textContent=`€${ammortizzato.toLocaleString('it-IT',{maximumFractionDigits:0})}`;
-document.getElementById('ammRemain').textContent=`€${daAmm.toLocaleString('it-IT',{maximumFractionDigits:0})}`;
-document.getElementById('ammPerc').textContent=`${ammPerc}%`;
-document.getElementById('ammPercLabel').textContent=`${ammPerc}% recuperato`;
-setTimeout(()=>{document.getElementById('ammBar').style.width=ammPerc+'%';},300);
+// ammortamento aggiornato da updateAmmortamento() chiamata da renderMensile()
 
 const kpiAnniEl=document.getElementById('kpiAnni');
 anni.forEach(anno=>{const dati=rawData.filter(d=>d[0]===anno);const tot=dati.reduce((s,d)=>s+d[2],0);const immessa=dati.reduce((s,d)=>s+d[5],0);const div=document.createElement('div');div.className='kpi-card';div.innerHTML=`<div class="kpi-label" style="color:${colori[anno]}">${anno}</div><div class="kpi-value" style="color:${colori[anno]};font-size:26px;">${Math.round(tot).toLocaleString('it-IT')}</div><div class="kpi-unit">kWh prodotti</div><div class="kpi-sub">${dati.length} mesi · immessa: ${Math.round(immessa)} kWh</div>`;kpiAnniEl.appendChild(div);});
@@ -380,13 +374,52 @@ let selectedYear = new Date().getFullYear();
 let chartMensileInst = null;
 let apiMonthlyData = null;
 
+// --- Ammortamento dinamico ---
+function updateAmmortamento() {
+  const saved = getMensileSaved();
+  // Mappa rawData per key
+  const rawMap = {};
+  rawData.forEach(d => { rawMap[d[0]+'-'+d[1]] = { autoconsumo: d[6], savBase: d[7] }; });
+
+  let total = 0;
+  // Contributo mesi rawData: uso prezzo reale (materia/kwh_eff) se inserito, altrimenti d[7]
+  Object.keys(rawMap).forEach(key => {
+    const s = saved[key];
+    if (s && s.kwh_eff > 0 && s.materia > 0) {
+      total += rawMap[key].autoconsumo * (s.materia / s.kwh_eff);
+    } else {
+      total += rawMap[key].savBase;
+    }
+    if (s && s.gse > 0) total += s.gse;
+  });
+  // Mesi solo in localStorage (non in rawData: API future/correnti)
+  Object.keys(saved).forEach(key => {
+    if (!rawMap[key]) {
+      const s = saved[key];
+      if (apiMonthlyData) {
+        const [yr, mes] = key.split('-');
+        const api = apiMonthlyData.find(d => d.anno == yr && d.mese === mes);
+        if (api && s.kwh_eff > 0 && s.materia > 0) total += api.autoconsumo * (s.materia / s.kwh_eff);
+      }
+      if (s.gse > 0) total += s.gse;
+    }
+  });
+
+  const perc = Math.min(total / INVESTIMENTO * 100, 100).toFixed(1);
+  document.getElementById('ammRecov').textContent = `€${Math.round(total).toLocaleString('it-IT')}`;
+  document.getElementById('ammRemain').textContent = `€${Math.round(INVESTIMENTO - total).toLocaleString('it-IT')}`;
+  document.getElementById('ammPerc').textContent = `${perc}%`;
+  document.getElementById('ammPercLabel').textContent = `${perc}% recuperato`;
+  document.getElementById('ammBar').style.width = perc + '%';
+}
+
 // --- Bolletta / GSE persistence (localStorage) ---
 function getMensileSaved() {
   return JSON.parse(localStorage.getItem('mensile') || '{}');
 }
 function saveMensileInput(key, field, value) {
   const saved = getMensileSaved();
-  if (!saved[key]) saved[key] = { bolletta: 0, gse: 0 };
+  if (!saved[key]) saved[key] = { bolletta: 0, gse: 0, kwh_eff: 0, materia: 0 };
   saved[key][field] = parseFloat(value) || 0;
   localStorage.setItem('mensile', JSON.stringify(saved));
   renderMensile();
@@ -416,7 +449,7 @@ function renderMensile() {
   const historical = {};
   rawData.filter(d => d[0] === selectedYear).forEach(d => {
     const key = d[0] + '-' + d[1];
-    historical[key] = { anno: d[0], mese: d[1], produzione: d[2], da_rete: Math.round(d[3]), immessa: d[5], autoconsumo: d[6], bolletta: d[9], gse: 0, fromAPI: false };
+    historical[key] = { anno: d[0], mese: d[1], produzione: d[2], da_rete: Math.round(d[3]), immessa: d[5], autoconsumo: d[6], bolletta: d[9], gse: 0, kwh_eff: 0, materia: 0, fromAPI: false };
   });
 
   // Sovrascrivi / aggiungi mesi da API Delios_Giornaliero
@@ -426,7 +459,7 @@ function renderMensile() {
       if (historical[key]) {
         Object.assign(historical[key], { produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, fromAPI: true });
       } else {
-        historical[key] = { anno: d.anno, mese: d.mese, produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, bolletta: 0, gse: 0, fromAPI: true };
+        historical[key] = { anno: d.anno, mese: d.mese, produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, bolletta: 0, gse: 0, kwh_eff: 0, materia: 0, fromAPI: true };
       }
     });
   }
@@ -436,6 +469,8 @@ function renderMensile() {
     if (saved[key]) {
       if (saved[key].bolletta !== undefined) historical[key].bolletta = saved[key].bolletta;
       if (saved[key].gse !== undefined) historical[key].gse = saved[key].gse;
+      if (saved[key].kwh_eff !== undefined) historical[key].kwh_eff = saved[key].kwh_eff;
+      if (saved[key].materia !== undefined) historical[key].materia = saved[key].materia;
     }
   });
 
@@ -457,20 +492,24 @@ function renderMensile() {
   const inpStyle = 'width:62px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:4px;padding:2px 5px;font-family:\'Space Mono\',monospace;font-size:11px;text-align:right;';
   const tbody = document.getElementById('tbodyMensile');
   tbody.innerHTML = '';
-  let totProd=0, totAuto=0, totImm=0, totRete=0, totBoll=0, totGse=0;
+  let totProd=0, totAuto=0, totImm=0, totRete=0, totBoll=0, totGse=0, totKwhEff=0, totMateria=0;
 
   dati.forEach(d => {
     const key = d.anno + '-' + d.mese;
     totProd += d.produzione; totAuto += d.autoconsumo; totImm += d.immessa; totRete += d.da_rete;
-    totBoll += d.bolletta;   totGse  += d.gse;
+    totBoll += d.bolletta;   totGse  += d.gse; totKwhEff += d.kwh_eff; totMateria += d.materia;
     const netto = (d.bolletta - d.gse).toFixed(0);
     const dot = d.fromAPI ? '<span style="color:var(--green);font-size:9px;margin-left:3px;" title="dato inverter">●</span>' : '';
     const tr = document.createElement('tr');
+    const eurokwh = d.kwh_eff > 0 ? (d.materia / d.kwh_eff).toFixed(4) : '—';
     tr.innerHTML = `<td>${d.mese}${dot}</td>
       <td class="num warn">${d.produzione}</td>
       <td class="num good">${d.autoconsumo}</td>
       <td class="num" style="color:var(--blue)">${d.immessa}</td>
       <td class="num">${d.da_rete}</td>
+      <td class="num"><input type="number" step="1" min="0" value="${d.kwh_eff||0}" onchange="saveMensileInput('${key}','kwh_eff',this.value)" style="${inpStyle}color:var(--blue);"></td>
+      <td class="num"><input type="number" step="0.01" min="0" value="${d.materia?d.materia.toFixed(2):'0'}" onchange="saveMensileInput('${key}','materia',this.value)" style="${inpStyle}color:var(--sun);"></td>
+      <td class="num" style="color:var(--sun);font-size:11px;">${eurokwh !== '—' ? '€'+eurokwh : '—'}</td>
       <td class="num"><input type="number" step="1" min="0" value="${d.bolletta.toFixed(0)}" onchange="saveMensileInput('${key}','bolletta',this.value)" style="${inpStyle}color:var(--text);"></td>
       <td class="num"><input type="number" step="1" min="0" value="${d.gse.toFixed(0)}" onchange="saveMensileInput('${key}','gse',this.value)" style="${inpStyle}color:var(--green);"></td>
       <td class="num" style="color:${netto>0?'var(--red)':'var(--green)'}">€${netto}</td>`;
@@ -479,15 +518,20 @@ function renderMensile() {
 
   const trTot = document.createElement('tr');
   trTot.style.cssText = 'font-weight:700;border-top:2px solid rgba(245,166,35,0.3)';
+  const totEurokwh = totKwhEff > 0 ? '€'+(totMateria/totKwhEff).toFixed(4) : '—';
   trTot.innerHTML = `<td style="color:var(--sun)">TOTALE ${selectedYear}</td>
     <td class="num warn">${Math.round(totProd)}</td>
     <td class="num good">${Math.round(totAuto)}</td>
     <td class="num" style="color:var(--blue)">${Math.round(totImm)}</td>
     <td class="num">${Math.round(totRete)}</td>
+    <td class="num" style="color:var(--blue)">${Math.round(totKwhEff)}</td>
+    <td class="num" style="color:var(--sun)">€${Math.round(totMateria)}</td>
+    <td class="num" style="color:var(--sun)">${totEurokwh}</td>
     <td class="num">€${Math.round(totBoll)}</td>
     <td class="num" style="color:var(--green)">€${Math.round(totGse)}</td>
     <td class="num">€${Math.round(totBoll - totGse)}</td>`;
   tbody.appendChild(trTot);
+  updateAmmortamento();
 }
 
 // Fetch monthly API data e re-render
