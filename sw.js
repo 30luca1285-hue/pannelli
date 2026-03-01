@@ -1,4 +1,4 @@
-const CACHE = 'pannelli-v1';
+const CACHE = 'pannelli-v2';
 const STATIC_ASSETS = [
   '/pannelli/',
   '/pannelli/index.html',
