@@ -390,28 +390,44 @@ function updateAmmortamento() {
   let extra = 0;
   let lastKey = null, lastGse = 0, lastAuto = 0;
 
-  // GSE inseriti in localStorage per tutti i mesi (rawData e non)
+  // GSE inseriti in localStorage + valorizzazione autoconsumo per tutti i mesi
   Object.keys(saved).forEach(key => {
     const s = saved[key];
-    let gseAmt = 0, autoAmt = 0;
+    let gseAmt = 0, autoAmt = 0, autoDisplay = 0;
     if (s.gse > 0) gseAmt = s.gse;
-    // Per mesi nuovi (non in rawData): aggiungi anche risparmio autoconsumo se si ha il prezzo
-    if (!rawKeys.has(key) && apiMonthlyData && s.kwh_eff > 0 && s.materia > 0) {
-      const [yr, mes] = key.split('-');
-      const api = apiMonthlyData.find(d => d.anno == yr && d.mese === mes);
-      if (api) autoAmt = api.autoconsumo * (s.materia / s.kwh_eff);
+
+    if (rawKeys.has(key)) {
+      // Mese in rawData: BASE già include d[7]. Se l'utente ha inserito kwh_eff+materia,
+      // calcola il nuovo valore e aggiungi il delta rispetto al d[7] hardcoded.
+      if (s.kwh_eff > 0 && s.materia > 0) {
+        const rawRow = rawData.find(d => d[0]+'-'+d[1] === key);
+        if (rawRow && rawRow[6] > 0) {
+          const newAuto = rawRow[6] * (s.materia / s.kwh_eff);
+          autoAmt = newAuto - (rawRow[7] || 0); // delta vs valore hardcoded in BASE
+          autoDisplay = newAuto;                 // valore pieno per il display
+        }
+      }
+    } else {
+      // Mese non in rawData: aggiungi tutto (BASE non include niente per questi mesi)
+      if (s.kwh_eff > 0 && s.materia > 0) {
+        const [yr, mes] = key.split('-');
+        const src = (apiMonthlyData && apiMonthlyData.find(d => d.anno == yr && d.mese === mes))
+                 || sheetsMonthly2026.find(d => d.anno == yr && d.mese === mes);
+        if (src) { autoAmt = src.autoconsumo * (s.materia / s.kwh_eff); autoDisplay = autoAmt; }
+      }
     }
+
     extra += gseAmt + autoAmt;
     // Traccia l'ultimo mese con contributo non zero
-    if (gseAmt > 0 || autoAmt > 0) {
+    if (gseAmt > 0 || autoDisplay > 0) {
       const [yr, mes] = key.split('-');
       const curVal = parseInt(yr) * 100 + (meseOrd[mes] || 0);
       if (!lastKey) {
-        lastKey = key; lastGse = gseAmt; lastAuto = autoAmt;
+        lastKey = key; lastGse = gseAmt; lastAuto = autoDisplay;
       } else {
         const [lyr, lmes] = lastKey.split('-');
         const lastVal = parseInt(lyr) * 100 + (meseOrd[lmes] || 0);
-        if (curVal > lastVal) { lastKey = key; lastGse = gseAmt; lastAuto = autoAmt; }
+        if (curVal > lastVal) { lastKey = key; lastGse = gseAmt; lastAuto = autoDisplay; }
       }
     }
   });
