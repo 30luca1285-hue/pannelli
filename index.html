@@ -191,7 +191,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div class="grid-bg"></div>
 <div class="container">
 <header>
-<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v34</span></p></div>
+<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v35</span></p></div>
 <div class="header-meta"><div class="live-badge"><span class="live-dot"></span> <span id="statusBadge">DATI STORICI</span></div><div class="last-update" id="updateTime"></div></div>
 </header>
 
@@ -234,7 +234,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div class="amm-section"><div class="amm-header"><div><div class="amm-title">💰 Ammortamento Investimento</div><div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:4px;">Investimento iniziale: €24.000</div></div><div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--green);" id="ammPerc">—</div></div>
 <div class="amm-nums"><div class="amm-num-item"><div class="amm-num-label">Investimento</div><div class="amm-num-value invested">€24.000</div></div><div class="amm-num-item"><div class="amm-num-label">Recuperato</div><div class="amm-num-value recovered" id="ammRecov">—</div></div><div class="amm-num-item"><div class="amm-num-label">Da recuperare</div><div class="amm-num-value remaining" id="ammRemain">—</div></div></div>
 <div class="progress-bar-bg"><div class="progress-bar-fill" id="ammBar" style="width:0%"></div></div>
-<div class="progress-label"><span>Maggio 2022</span><span id="ammPercLabel">0%</span><span>Obiettivo: €0</span></div></div>
+<div class="progress-label"><span>Maggio 2022</span><span id="ammPercLabel">0%</span><span>Obiettivo: €0</span></div><div id="ammLastInsert" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);margin-top:6px;text-align:center;"></div></div>
 <div class="kpi-grid">
 <div class="kpi-card"><div class="kpi-label">⚡ Produzione Totale</div><div class="kpi-value" id="kpi-prod">—</div><div class="kpi-unit">kWh prodotti</div><div class="kpi-sub" id="kpi-prod-sub">—</div></div>
 <div class="kpi-card"><div class="kpi-label">🔋 Autoconsumo Medio</div><div class="kpi-value" id="kpi-auto">—</div><div class="kpi-unit">% produzione consumata</div><div class="kpi-sub">Media su tutti i mesi</div></div>
@@ -384,17 +384,34 @@ function updateAmmortamento() {
   // Baseline storica hardcoded (include risparmi autoconsumo + rimborsi una tantum passati)
   const BASE = 13688.371;
   const rawKeys = new Set(rawData.map(d => d[0]+'-'+d[1]));
+  const meseOrd = {Gennaio:1,Febbraio:2,Marzo:3,Aprile:4,Maggio:5,Giugno:6,Luglio:7,Agosto:8,Settembre:9,Ottobre:10,Novembre:11,Dicembre:12};
 
   let extra = 0;
+  let lastKey = null, lastGse = 0, lastAuto = 0;
+
   // GSE inseriti in localStorage per tutti i mesi (rawData e non)
   Object.keys(saved).forEach(key => {
     const s = saved[key];
-    if (s.gse > 0) extra += s.gse;
+    let gseAmt = 0, autoAmt = 0;
+    if (s.gse > 0) gseAmt = s.gse;
     // Per mesi nuovi (non in rawData): aggiungi anche risparmio autoconsumo se si ha il prezzo
     if (!rawKeys.has(key) && apiMonthlyData && s.kwh_eff > 0 && s.materia > 0) {
       const [yr, mes] = key.split('-');
       const api = apiMonthlyData.find(d => d.anno == yr && d.mese === mes);
-      if (api) extra += api.autoconsumo * (s.materia / s.kwh_eff);
+      if (api) autoAmt = api.autoconsumo * (s.materia / s.kwh_eff);
+    }
+    extra += gseAmt + autoAmt;
+    // Traccia l'ultimo mese con contributo non zero
+    if (gseAmt > 0 || autoAmt > 0) {
+      const [yr, mes] = key.split('-');
+      const curVal = parseInt(yr) * 100 + (meseOrd[mes] || 0);
+      if (!lastKey) {
+        lastKey = key; lastGse = gseAmt; lastAuto = autoAmt;
+      } else {
+        const [lyr, lmes] = lastKey.split('-');
+        const lastVal = parseInt(lyr) * 100 + (meseOrd[lmes] || 0);
+        if (curVal > lastVal) { lastKey = key; lastGse = gseAmt; lastAuto = autoAmt; }
+      }
     }
   });
 
@@ -405,6 +422,21 @@ function updateAmmortamento() {
   document.getElementById('ammPerc').textContent = `${perc}%`;
   document.getElementById('ammPercLabel').textContent = `${perc}% recuperato`;
   document.getElementById('ammBar').style.width = perc + '%';
+
+  // Riga "ultimo inserimento"
+  const lastEl = document.getElementById('ammLastInsert');
+  if (lastEl) {
+    if (lastKey) {
+      const [yr, mes] = lastKey.split('-');
+      const parts = [];
+      if (lastGse > 0) parts.push(`GSE €${Math.round(lastGse).toLocaleString('it-IT')}`);
+      if (lastAuto > 0) parts.push(`Auto €${Math.round(lastAuto).toLocaleString('it-IT')}`);
+      const tot = Math.round(lastGse + lastAuto);
+      lastEl.textContent = `Ultimo ins. ${mes} ${yr} — €${tot.toLocaleString('it-IT')} (${parts.join(' + ')})`;
+    } else {
+      lastEl.textContent = '';
+    }
+  }
 }
 
 // --- Bolletta / GSE persistence (localStorage) ---
