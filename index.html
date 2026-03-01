@@ -191,7 +191,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div class="grid-bg"></div>
 <div class="container">
 <header>
-<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v33</span></p></div>
+<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v34</span></p></div>
 <div class="header-meta"><div class="live-badge"><span class="live-dot"></span> <span id="statusBadge">DATI STORICI</span></div><div class="last-update" id="updateTime"></div></div>
 </header>
 
@@ -326,7 +326,11 @@ const rawData = [
 [2025,"Novembre",524,888,154.87,50,460,80.23,883,154,0.1744],
 [2025,"Dicembre",415,1461,254.09,10,398,69.22,1449,252,0.1739],
 [2026,"Gennaio",392,1549,277,7,376,67.24,1549,277,0.1788],
+[2026,"Febbraio",612,887,0,76,521,0,0,0,0],
 ];
+
+// Mesi con dati manuali da foglio: API incompleta, non sovrascrivere
+const lockedMonths = new Set(['2026-Febbraio']);
 
 const INVESTIMENTO=24000;
 const mesiNomi=["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
@@ -446,6 +450,7 @@ function renderMensile() {
   if (apiMonthlyData) {
     apiMonthlyData.filter(d => d.anno === selectedYear).forEach(d => {
       const key = d.anno + '-' + d.mese;
+      if (lockedMonths.has(key)) return; // dati manuali, API incompleta per questo mese
       if (historical[key]) {
         Object.assign(historical[key], { produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, fromAPI: true });
       } else {
