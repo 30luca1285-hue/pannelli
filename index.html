@@ -191,7 +191,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div class="grid-bg"></div>
 <div class="container">
 <header>
-<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v35</span></p></div>
+<div class="logo-area"><h1>☀ PEIMAR SF340M</h1><p>Impianto fotovoltaico · Inverter Delios · Monitoraggio 2022–2026 &nbsp;<span style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);opacity:0.6;">v36</span></p></div>
 <div class="header-meta"><div class="live-badge"><span class="live-dot"></span> <span id="statusBadge">DATI STORICI</span></div><div class="last-update" id="updateTime"></div></div>
 </header>
 
@@ -377,6 +377,7 @@ new Chart(document.getElementById('chartDonut'),{type:'doughnut',data:{labels:['
 let selectedYear = new Date().getFullYear();
 let chartMensileInst = null;
 let apiMonthlyData = null;
+let sheetsMonthly2026 = []; // dati caricati da foglio Mensile_2026
 
 // --- Ammortamento dinamico ---
 function updateAmmortamento() {
@@ -449,6 +450,20 @@ function saveMensileInput(key, field, value) {
   saved[key][field] = parseFloat(value) || 0;
   localStorage.setItem('mensile', JSON.stringify(saved));
   renderMensile();
+
+  // Per mesi 2026+: salva anche su Sheets (fire-and-forget)
+  const [yr, mes] = key.split('-');
+  if (parseInt(yr) >= 2026) {
+    const s = saved[key];
+    const apiRow = apiMonthlyData ? apiMonthlyData.find(d => d.anno == yr && d.mese === mes) : null;
+    const rawRow = rawData.find(d => d[0] == yr && d[1] === mes);
+    const produzione  = apiRow ? apiRow.produzione  : (rawRow ? rawRow[2] : 0);
+    const autoconsumo = apiRow ? apiRow.autoconsumo : (rawRow ? rawRow[6] : 0);
+    const da_rete     = apiRow ? apiRow.da_rete     : (rawRow ? rawRow[3] : 0);
+    const immessa     = apiRow ? apiRow.immessa     : (rawRow ? rawRow[5] : 0);
+    gasGet('saveMensile2026', { anno: yr, mese: mes, produzione, autoconsumo, da_rete, immessa,
+      kwh_eff: s.kwh_eff, materia: s.materia, gse: s.gse, bolletta: s.bolletta });
+  }
 }
 
 // --- Year pills (include anni da API) ---
@@ -487,6 +502,18 @@ function renderMensile() {
         Object.assign(historical[key], { produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, fromAPI: true });
       } else {
         historical[key] = { anno: d.anno, mese: d.mese, produzione: d.produzione, autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa, bolletta: 0, gse: 0, kwh_eff: 0, materia: 0, fromAPI: true };
+      }
+    });
+  }
+
+  // Per 2026+: usa sheetsMonthly2026 come fallback kWh quando il mese non è in rawData né in API
+  if (selectedYear >= 2026 && sheetsMonthly2026.length > 0) {
+    sheetsMonthly2026.filter(d => d.anno == selectedYear).forEach(d => {
+      const key = d.anno + '-' + d.mese;
+      if (!historical[key] && (d.produzione > 0 || d.autoconsumo > 0)) {
+        historical[key] = { anno: d.anno, mese: d.mese, produzione: d.produzione,
+          autoconsumo: d.autoconsumo, da_rete: d.da_rete, immessa: d.immessa,
+          bolletta: 0, gse: 0, kwh_eff: 0, materia: 0, fromAPI: false };
       }
     });
   }
@@ -564,6 +591,29 @@ async function fetchMonthlyAPI() {
   apiMonthlyData = await gasGet('monthly');
   buildYearPills();
   renderMensile();
+  fetchMensile2026(); // carica dati 2026+ da Sheets dopo il render iniziale
+}
+
+// Carica dati Mensile_2026 da Sheets e sincronizza su localStorage
+async function fetchMensile2026() {
+  const data = await gasGet('loadMensile2026');
+  if (!data || !Array.isArray(data) || data.length === 0) return;
+  sheetsMonthly2026 = data;
+  const saved = getMensileSaved();
+  let changed = false;
+  data.forEach(row => {
+    const key = row.anno + '-' + row.mese;
+    if (!saved[key]) { saved[key] = { bolletta: 0, gse: 0, kwh_eff: 0, materia: 0 }; }
+    // I valori di Sheets sono autoritativi (sostituiscono localStorage)
+    if (row.kwh_eff  > 0 && saved[key].kwh_eff  !== row.kwh_eff)  { saved[key].kwh_eff  = row.kwh_eff;  changed = true; }
+    if (row.materia  > 0 && saved[key].materia   !== row.materia)  { saved[key].materia  = row.materia;  changed = true; }
+    if (row.gse      > 0 && saved[key].gse       !== row.gse)      { saved[key].gse      = row.gse;      changed = true; }
+    if (row.bolletta > 0 && saved[key].bolletta  !== row.bolletta) { saved[key].bolletta = row.bolletta; changed = true; }
+  });
+  if (changed) {
+    localStorage.setItem('mensile', JSON.stringify(saved));
+    renderMensile();
+  }
 }
 
 buildYearPills(); renderMensile();
