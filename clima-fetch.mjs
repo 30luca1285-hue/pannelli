@@ -58,8 +58,10 @@ async function main() {
   for (const rm of rooms) {
     const cw = rm.cooling.w, hw = rm.heating.w, n = Math.max(cw.length, hw.length);
     for (let i = 0; i < n; i++) upD.run(dateMinus(n - 1 - i, now), rm.name, cw[i] || 0, hw[i] || 0);
+    // m[] = calendario fisso: idx0 = gennaio dell'anno scorso, 2 anni gen→dic
     const cm = rm.cooling.m, hm = rm.heating.m, nm = Math.max(cm.length, hm.length);
-    for (let i = 0; i < nm; i++) upM.run(ymMinus(nm - 1 - i, now), rm.name, cm[i] || 0, hm[i] || 0);
+    const Y = now.getFullYear();
+    for (let i = 0; i < nm; i++) { const yr = Y - 1 + Math.floor(i / 12), mo = (i % 12) + 1; upM.run(yr + '-' + String(mo).padStart(2, '0'), rm.name, cm[i] || 0, hm[i] || 0); }
   }
   db.close();
 

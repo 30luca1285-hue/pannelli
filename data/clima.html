@@ -61,16 +61,17 @@ const MESI=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','d
 const fmt=n=>(Math.round(n*10)/10).toLocaleString('it-IT');
 const fmtE=n=>'€'+(Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
 const sum=a=>(a||[]).reduce((s,x)=>s+(typeof x==='number'?x:0),0);
-const CP={d:{rooms:'oggi',slots:12,title:'Consumo per fascia di 2 ore (oggi)'},w:{rooms:'14 giorni',slots:14,title:'Consumo giornaliero (14 giorni)'},m:{rooms:'24 mesi',slots:24,title:'Consumo mensile (24 mesi)'}};
+const CP={d:{rooms:'oggi',slots:12,title:'Consumo per fascia di 2 ore (oggi)'},w:{rooms:'14 giorni',slots:14,title:'Consumo giornaliero (14 giorni)'},m:{rooms:'mensile',slots:24,title:'Consumo mensile · caldo vs freddo'}};
 let DATA=null,period='d',room='__all__',tariff=0.28,chart=null,now=new Date();
 try{const t=parseFloat(localStorage.getItem('clima_tariff'));if(t>0)tariff=t;}catch(e){}
-const serie=(a,p)=>{a=a||[];return p==='d'?a.slice(12,24):a.slice();};
+const monthCount=()=>12+now.getMonth()+1; // gen anno scorso → mese corrente
+const serie=(a,p)=>{a=a||[];if(p==='d')return a.slice(12,24);if(p==='m')return a.slice(0,monthCount());return a.slice();};
 const active=()=>room==='__all__'?DATA.rooms:DATA.rooms.filter(r=>r.name===room);
 function labels(p){const n=CP[p].slots,o=[];
   if(p==='d'){for(let h=0;h<24;h+=2)o.push(String(h).padStart(2,'0'));return o;}
   if(p==='w'){for(let i=n-1;i>=0;i--){const dt=new Date(now);dt.setDate(dt.getDate()-i);o.push(dt.getDate()+'/'+(dt.getMonth()+1));}return o;}
-  for(let i=n-1;i>=0;i--){const dt=new Date(now.getFullYear(),now.getMonth()-i,1);o.push(MESI[dt.getMonth()]+' '+String(dt.getFullYear()).slice(2));}return o;}
-const agg=(rooms,mode,p)=>{const out=new Array(p==='d'?12:CP[p].slots).fill(0);rooms.forEach(r=>{serie(r[mode]?.[p],p).forEach((v,i)=>out[i]+=(typeof v==='number'?v:0));});return out;};
+  const Y=now.getFullYear(),mc=monthCount();for(let i=0;i<mc;i++){const yr=Y-1+Math.floor(i/12),mo=i%12;o.push(MESI[mo]+' '+String(yr).slice(2));}return o;}
+const agg=(rooms,mode,p)=>{const out=new Array(p==='d'?12:(p==='m'?monthCount():CP[p].slots)).fill(0);rooms.forEach(r=>{serie(r[mode]?.[p],p).forEach((v,i)=>out[i]+=(typeof v==='number'?v:0));});return out;};
 function render(){
   const p=period;
   document.getElementById('sub').textContent='Aggiornato '+now.toLocaleString('it-IT',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+' · stima Daikin per stanza';
