@@ -1,0 +1,10 @@
+{
+  "name": "Energia — Galluzzi",
+  "short_name": "Energia",
+  "start_url": "/energia/",
+  "scope": "/energia/",
+  "display": "standalone",
+  "background_color": "#0f1720",
+  "theme_color": "#0f1720",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

@@ -11,3 +11,11 @@ Dashboard.html
 
 # Claude
 .claude/
+.env
+.daikin-token.json
+storico.db
+storico.db-*
+node_modules/
+data/*.json
+*.log
+data/storico.db

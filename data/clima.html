@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Consumi Clima</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#0f1720;--card:#18222e;--card2:#1f2c3a;--line:#2a3848;--txt:#e8eef5;--mut:#90a2b6;--cool:#3aa0ff;--heat:#ff7a45;--accent:#36c98d;--azienda:#c8922a;--casa:#7a8cff}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:12px 12px 40px;max-width:680px;margin:0 auto}
+  .sub{color:var(--mut);font-size:11.5px;margin:0 2px 12px}
+  .seg{display:flex;background:var(--card);border-radius:12px;padding:4px;gap:4px;margin-bottom:12px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--mut);font-size:13px;font-weight:600;padding:9px 4px;border-radius:9px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#06231a}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 13px}
+  .kpi .lab{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .kpi .val{font-size:21px;font-weight:700;margin-top:3px}.kpi .val small{font-size:13px;color:var(--mut);font-weight:500}
+  .split{display:flex;gap:14px;margin-top:6px;font-size:12px}.split b{font-weight:700}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  .cool-c{color:var(--cool)}.heat-c{color:var(--heat)}
+  .tariff{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:13px}
+  .tariff input{width:78px;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 8px;font-size:15px;text-align:right}
+  .chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px}
+  .chips button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--mut);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer;white-space:nowrap}
+  .chips button.on{background:var(--txt);color:#0f1720;border-color:var(--txt)}
+  .chartbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px 8px;margin-bottom:10px}
+  .chartbox .ttl{font-size:13px;font-weight:600;margin:0 4px 8px}.canvas-wrap{position:relative;height:240px;width:100%}
+  .legend{display:flex;gap:16px;justify-content:center;font-size:12px;color:var(--mut);margin:2px 0 14px;flex-wrap:wrap}
+  .rooms{display:flex;flex-direction:column;gap:9px}
+  .room{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 13px;cursor:pointer;display:flex;align-items:center;gap:11px}
+  .room.sel{border-color:var(--accent)}.room .nm{font-weight:600;font-size:14.5px}
+  .room .bd{font-size:10px;padding:2px 7px;border-radius:6px;margin-left:7px;font-weight:700}
+  .bd.azienda{background:rgba(200,146,42,.18);color:var(--azienda)}.bd.casa{background:rgba(122,140,255,.18);color:var(--casa)}
+  .room .meta{color:var(--mut);font-size:11.5px;margin-top:3px}.room .rt{margin-left:auto;text-align:right}
+  .room .rt .e{font-size:17px;font-weight:700}.room .rt .k{font-size:11px;color:var(--mut)}
+  .bar{height:6px;border-radius:4px;background:var(--line);overflow:hidden;display:flex;margin-top:7px;width:100%}.bar i{display:block;height:100%}
+  .foot{color:var(--mut);font-size:11px;text-align:center;margin-top:18px;line-height:1.5}
+  .section-h{font-size:13px;color:var(--mut);font-weight:600;margin:16px 4px 9px;text-transform:uppercase;letter-spacing:.04em}
+</style>
+</head>
+<body>
+  <div class="sub" id="sub">—</div>
+  <div class="seg" id="seg"><button data-p="d" class="on">Oggi</button><button data-p="w">14 giorni</button><button data-p="m">Mensile</button></div>
+  <div class="cards">
+    <div class="kpi"><div class="lab" id="kpiPerLab">Totale</div><div class="val" id="kpiTot">— <small>kWh</small></div>
+      <div class="split"><span><span class="dot" style="background:var(--cool)"></span><span class="cool-c">Freddo</span> <b id="kpiCool">—</b></span><span><span class="dot" style="background:var(--heat)"></span><span class="heat-c">Caldo</span> <b id="kpiHeat">—</b></span></div></div>
+    <div class="kpi"><div class="lab">Costo stimato</div><div class="val" id="kpiEur">— <small>€</small></div>
+      <div class="split"><span>🏢 <b id="kpiAz">—</b></span><span>🏠 <b id="kpiCa">—</b></span></div></div>
+  </div>
+  <div class="tariff"><span>💶 Tariffa</span><input id="tariff" type="number" step="0.01" inputmode="decimal"><span>€/kWh</span><span style="color:var(--mut);margin-left:auto;font-size:11px">modificabile</span></div>
+  <div class="chips" id="chips"></div>
+  <div class="chartbox"><div class="ttl" id="chartTtl">—</div><div class="canvas-wrap"><canvas id="chart"></canvas></div></div>
+  <div class="legend"><span><span class="dot" style="background:var(--cool)"></span>Freddo (raffrescamento)</span><span><span class="dot" style="background:var(--heat)"></span>Caldo (riscaldamento)</span></div>
+  <div class="section-h">Per stanza · <span id="roomsPerLab">oggi</span></div>
+  <div class="rooms" id="rooms"></div>
+  <div class="foot" id="foot">—</div>
+<script>
+const MESI=['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+const fmt=n=>(Math.round(n*10)/10).toLocaleString('it-IT');
+const fmtE=n=>'€'+(Math.round(n*100)/100).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+const sum=a=>(a||[]).reduce((s,x)=>s+(typeof x==='number'?x:0),0);
+const CP={d:{rooms:'oggi',slots:12,title:'Consumo per fascia di 2 ore (oggi)'},w:{rooms:'14 giorni',slots:14,title:'Consumo giornaliero (14 giorni)'},m:{rooms:'24 mesi',slots:24,title:'Consumo mensile (24 mesi)'}};
+let DATA=null,period='d',room='__all__',tariff=0.28,chart=null,now=new Date();
+try{const t=parseFloat(localStorage.getItem('clima_tariff'));if(t>0)tariff=t;}catch(e){}
+const serie=(a,p)=>{a=a||[];return p==='d'?a.slice(12,24):a.slice();};
+const active=()=>room==='__all__'?DATA.rooms:DATA.rooms.filter(r=>r.name===room);
+function labels(p){const n=CP[p].slots,o=[];
+  if(p==='d'){for(let h=0;h<24;h+=2)o.push(String(h).padStart(2,'0'));return o;}
+  if(p==='w'){for(let i=n-1;i>=0;i--){const dt=new Date(now);dt.setDate(dt.getDate()-i);o.push(dt.getDate()+'/'+(dt.getMonth()+1));}return o;}
+  for(let i=n-1;i>=0;i--){const dt=new Date(now.getFullYear(),now.getMonth()-i,1);o.push(MESI[dt.getMonth()]+' '+String(dt.getFullYear()).slice(2));}return o;}
+const agg=(rooms,mode,p)=>{const out=new Array(p==='d'?12:CP[p].slots).fill(0);rooms.forEach(r=>{serie(r[mode]?.[p],p).forEach((v,i)=>out[i]+=(typeof v==='number'?v:0));});return out;};
+function render(){
+  const p=period;
+  document.getElementById('sub').textContent='Aggiornato '+now.toLocaleString('it-IT',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+' · stima Daikin per stanza';
+  document.getElementById('roomsPerLab').textContent=CP[p].rooms;
+  document.getElementById('kpiPerLab').textContent='Totale '+CP[p].rooms;
+  document.getElementById('tariff').value=tariff;
+  const act=active();let cool=0,heat=0,az=0,ca=0;
+  DATA.rooms.forEach(r=>{const t=sum(serie(r.cooling?.[p],p))+sum(serie(r.heating?.[p],p));if(r.group==='azienda')az+=t;else ca+=t;});
+  act.forEach(r=>{cool+=sum(serie(r.cooling?.[p],p));heat+=sum(serie(r.heating?.[p],p));});
+  const tot=cool+heat;
+  document.getElementById('kpiTot').innerHTML=fmt(tot)+' <small>kWh</small>';
+  document.getElementById('kpiCool').textContent=fmt(cool);document.getElementById('kpiHeat').textContent=fmt(heat);
+  document.getElementById('kpiEur').innerHTML=fmtE(tot*tariff).replace('€','')+' <small>€</small>';
+  document.getElementById('kpiAz').textContent=fmtE(az*tariff);document.getElementById('kpiCa').textContent=fmtE(ca*tariff);
+  document.getElementById('chartTtl').textContent=(room==='__all__'?'Tutte le stanze':room)+' — '+CP[p].title;
+  const labs=labels(p),cs=agg(act,'cooling',p),hs=agg(act,'heating',p);
+  if(chart)chart.destroy();
+  chart=new Chart(document.getElementById('chart'),{type:'bar',data:{labels:labs,datasets:[
+    {label:'Freddo',data:cs,backgroundColor:'#3aa0ff',stack:'s',borderRadius:3},
+    {label:'Caldo',data:hs,backgroundColor:'#ff7a45',stack:'s',borderRadius:3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.raw)+' kWh ('+fmtE(c.raw*tariff)+')'}}},
+      scales:{x:{stacked:true,grid:{display:false},ticks:{color:'#90a2b6',font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:p==='m'?8:12}},y:{stacked:true,grid:{color:'#2a3848'},ticks:{color:'#90a2b6',font:{size:10}}}}}});
+  const chips=document.getElementById('chips');
+  if(!chips.dataset.built){let h='<button data-r="__all__" class="on">Tutte</button>';DATA.rooms.forEach(r=>h+='<button data-r="'+r.name+'">'+r.name+'</button>');chips.innerHTML=h;chips.dataset.built='1';
+    chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{room=b.dataset.r;chips.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));render();});}
+  const rows=DATA.rooms.map(r=>{const c=sum(serie(r.cooling?.[p],p)),h=sum(serie(r.heating?.[p],p));return{r,c,h,tot:c+h};}).sort((a,b)=>b.tot-a.tot);
+  const cont=document.getElementById('rooms');cont.innerHTML='';
+  rows.forEach(o=>{const pc=o.tot>0?o.c/o.tot*100:0,ph=o.tot>0?o.h/o.tot*100:0;const div=document.createElement('div');
+    div.className='room'+(room===o.r.name?' sel':'');
+    div.innerHTML='<div style="flex:1;min-width:0"><span class="nm">'+o.r.name+'</span><span class="bd '+o.r.group+'">'+(o.r.group==='azienda'?'AZIENDA':'CASA')+'</span><div class="meta">freddo '+fmt(o.c)+' · caldo '+fmt(o.h)+' kWh</div><div class="bar"><i style="width:'+pc+'%;background:#3aa0ff"></i><i style="width:'+ph+'%;background:#ff7a45"></i></div></div><div class="rt"><div class="e">'+fmtE(o.tot*tariff)+'</div><div class="k">'+fmt(o.tot)+' kWh</div></div>';
+    div.onclick=()=>{room=o.r.name;document.querySelectorAll('#chips button').forEach(x=>x.classList.toggle('on',x.dataset.r===o.r.name));render();window.scrollTo({top:0,behavior:'smooth'});};
+    cont.appendChild(div);});
+  document.getElementById('foot').innerHTML='Dati API Daikin Onecta (stima, split a parete) · '+DATA.rooms.length+' unità · per il consumo elettrico reale: Shelly';
+}
+document.getElementById('seg').querySelectorAll('button').forEach(b=>b.onclick=()=>{period=b.dataset.p;document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x===b));render();});
+document.getElementById('tariff').addEventListener('change',e=>{const v=parseFloat(e.target.value);if(v>0){tariff=v;try{localStorage.setItem('clima_tariff',v);}catch(e){}render();}});
+fetch('clima.json?t='+Date.now()).then(r=>r.json()).then(d=>{DATA=d;now=new Date(d.generatedAt);tariff=tariff||d.tariffDefault||0.28;render();}).catch(()=>{document.getElementById('sub').textContent='Dati clima non disponibili';});
+</script>
+</body>
+</html>

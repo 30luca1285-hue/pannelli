@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Energia">
+<link rel="manifest" href="manifest.json">
+<title>Energia — Galluzzi</title>
+<style>
+  html,body{margin:0;height:100%;background:#0f1720;color:#e8eef5;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  .shell{display:flex;flex-direction:column;height:100dvh}
+  .tabbar{display:flex;gap:4px;padding:3px 8px calc(3px + env(safe-area-inset-bottom,0px));
+    background:#141d27;border-top:1px solid #243140;order:2}
+  .tabbar button{flex:1;border:0;background:transparent;color:#7a8ba0;font-size:11.5px;font-weight:600;
+    padding:4px 4px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:5px;line-height:1}
+  .tabbar button .ic{font-size:12px;opacity:.8}
+  .tabbar button.on{color:#36c98d;background:rgba(54,201,141,.12)}
+  .tabbar button.on .ic{opacity:1}
+  .frames{flex:1;position:relative;order:1}
+  .frames iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#0f1720}
+  .frames iframe.hide{display:none}
+  .ld{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#90a2b6;font-size:13px}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="frames">
+    <div class="ld" id="ld">Carico…</div>
+    <iframe id="fSol" title="Solare"></iframe>
+    <iframe id="fCli" class="hide" title="Clima"></iframe>
+  </div>
+  <div class="tabbar">
+    <button id="bSol" class="on" onclick="go('sol')"><span class="ic">☀️</span>Solare</button>
+    <button id="bCli" onclick="go('cli')"><span class="ic">🌡️</span>Clima</button>
+  </div>
+</div>
+<script>
+  const GAS='https://script.google.com/macros/s/AKfycbxXVLk-UsEycb1ItdqnjGqdmIULCTazUbVf1SE7xK8184eDrVWT4FwBcddtP_sUrfY9Ug/exec';
+  const fSol=document.getElementById('fSol'), fCli=document.getElementById('fCli'), ld=document.getElementById('ld');
+  let loaded={sol:false,cli:false};
+  function load(which){
+    if(which==='sol'&&!loaded.sol){fSol.src=GAS;loaded.sol=true;fSol.onload=()=>ld.style.display='none';}
+    if(which==='cli'&&!loaded.cli){fCli.src='clima.html';loaded.cli=true;}
+  }
+  function go(which){
+    document.getElementById('bSol').classList.toggle('on',which==='sol');
+    document.getElementById('bCli').classList.toggle('on',which==='cli');
+    fSol.classList.toggle('hide',which!=='sol');
+    fCli.classList.toggle('hide',which!=='cli');
+    load(which);
+    if(which==='sol'&&loaded.sol)ld.style.display='none';else if(which==='cli')ld.style.display='none';
+    try{localStorage.setItem('energia_tab',which);}catch(e){}
+  }
+  let init='sol'; try{const t=localStorage.getItem('energia_tab');if(t)init=t;}catch(e){}
+  go(init);
+</script>
+</body>
+</html>
