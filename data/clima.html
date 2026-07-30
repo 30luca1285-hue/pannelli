@@ -21,6 +21,8 @@
   .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
   .cool-c{color:var(--cool)}.heat-c{color:var(--heat)}
   .tariff{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:14px;font-size:13px}
+  .monthpick{display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px}
+  .monthpick select{flex:1;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 9px;font-size:15px;font-weight:600}
   .tariff input{width:78px;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:6px 8px;font-size:15px;text-align:right}
   .chips{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px}
   .chips button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);color:var(--mut);font-size:12.5px;font-weight:600;padding:7px 13px;border-radius:20px;cursor:pointer;white-space:nowrap}
@@ -43,6 +45,7 @@
 <body>
   <div class="sub" id="sub">—</div>
   <div class="seg" id="seg"><button data-p="d" class="on">Oggi</button><button data-p="w">14 giorni</button><button data-p="m">Mensile</button></div>
+  <div class="monthpick" id="monthpick" style="display:none"><span>📅 Mese</span><select id="monthSel"></select></div>
   <div class="cards">
     <div class="kpi"><div class="lab" id="kpiPerLab">Totale</div><div class="val" id="kpiTot">— <small>kWh</small></div>
       <div class="split"><span><span class="dot" style="background:var(--cool)"></span><span class="cool-c">Freddo</span> <b id="kpiCool">—</b></span><span><span class="dot" style="background:var(--heat)"></span><span class="heat-c">Caldo</span> <b id="kpiHeat">—</b></span></div></div>
@@ -63,17 +66,19 @@ const fmtE=n=>'€'+(Math.round(n*100)/100).toLocaleString('it-IT',{minimumFract
 const sum=a=>(a||[]).reduce((s,x)=>s+(typeof x==='number'?x:0),0);
 const CP={d:{rooms:'oggi',slots:12,title:'Consumo per fascia di 2 ore (oggi)'},w:{rooms:'14 giorni',slots:14,title:'Consumo giornaliero (14 giorni)'},m:{rooms:'mensile',slots:24,title:'Consumo mensile · caldo vs freddo'}};
 let DATA=null,period='d',room='__all__',tariff=0.28,chart=null,now=new Date();
+let selMonth=null; // indice nel calendario m[]: null = mese corrente
+const mIdx=()=>selMonth==null?monthCount()-1:selMonth;
+// in vista mensile lista e KPI mostrano UN SOLO mese (quello scelto), non la somma di tutti
+const valPeriodo=(a,p)=>p==='m'?(((a||[])[mIdx()])||0):sum(serie(a,p));
 try{const t=parseFloat(localStorage.getItem('clima_tariff'));if(t>0)tariff=t;}catch(e){}
 const monthCount=()=>12+now.getMonth()+1; // gen anno scorso → mese corrente
-// ⚠️ FIX 30/07/2026 — in vista "m" i totali NON sono di un mese: sommano tutti i mesi
-// da gennaio dell'anno scorso a oggi (19 a luglio 2026). L'etichetta diceva "mensile"
-// e faceva sembrare mensile un totale di quasi 2 anni. Ora l'etichetta dice il vero
-// periodo e ogni stanza mostra anche la MEDIA per mese, che è il dato che serve.
-const periodoLab=p=>{
-  if(p!=='m')return CP[p].rooms;
-  const mc=monthCount(),Y=now.getFullYear();
-  return mc+' mesi ('+MESI[0]+' '+String(Y-1).slice(2)+'–'+MESI[now.getMonth()]+' '+String(Y).slice(2)+')';
-};
+// ⚠️ FIX 30/07/2026 — prima la vista "m" SOMMAVA tutti i mesi da gennaio dell'anno
+// scorso (19 a luglio 2026) ma li etichettava "mensile": la Sala risultava 2330 kWh
+// "al mese" = 78 kWh/giorno da uno split, impossibile.
+// Ora si SCEGLIE il mese dal menu a tendina (default: mese corrente) e KPI + lista
+// per stanza mostrano SOLO quel mese, in kWh e in €. Il grafico resta su tutta la serie.
+const nomeMese=i=>{const Y=now.getFullYear();return MESI[i%12]+' '+(Y-1+Math.floor(i/12));};
+const periodoLab=p=>p==='m'?nomeMese(mIdx()):CP[p].rooms;
 const serie=(a,p)=>{a=a||[];if(p==='d')return a.slice(12,24);if(p==='m')return a.slice(0,monthCount());return a.slice();};
 const active=()=>room==='__all__'?DATA.rooms:DATA.rooms.filter(r=>r.name===room);
 function labels(p){const n=CP[p].slots,o=[];
@@ -85,11 +90,21 @@ function render(){
   const p=period;
   document.getElementById('sub').textContent='Aggiornato '+now.toLocaleString('it-IT',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+' · stima Daikin per stanza';
   document.getElementById('roomsPerLab').textContent=periodoLab(p);
+  const mp=document.getElementById('monthpick'),msel=document.getElementById('monthSel');
+  mp.style.display=(p==='m')?'flex':'none';
+  if(p==='m'){
+    const mc=monthCount();
+    if(msel.options.length!==mc){                       // popola una sola volta
+      let h='';for(let i=mc-1;i>=0;i--)h+='<option value="'+i+'">'+nomeMese(i)+(i===mc-1?' (in corso)':'')+'</option>';
+      msel.innerHTML=h;
+    }
+    msel.value=String(mIdx());
+  }
   document.getElementById('kpiPerLab').textContent='Totale '+periodoLab(p);
   document.getElementById('tariff').value=tariff;
   const act=active();let cool=0,heat=0,az=0,ca=0;
-  DATA.rooms.forEach(r=>{const t=sum(serie(r.cooling?.[p],p))+sum(serie(r.heating?.[p],p));if(r.group==='azienda')az+=t;else ca+=t;});
-  act.forEach(r=>{cool+=sum(serie(r.cooling?.[p],p));heat+=sum(serie(r.heating?.[p],p));});
+  DATA.rooms.forEach(r=>{const t=valPeriodo(r.cooling?.[p],p)+valPeriodo(r.heating?.[p],p);if(r.group==='azienda')az+=t;else ca+=t;});
+  act.forEach(r=>{cool+=valPeriodo(r.cooling?.[p],p);heat+=valPeriodo(r.heating?.[p],p);});
   const tot=cool+heat;
   document.getElementById('kpiTot').innerHTML=fmt(tot)+' <small>kWh</small>';
   document.getElementById('kpiCool').textContent=fmt(cool);document.getElementById('kpiHeat').textContent=fmt(heat);
@@ -106,16 +121,17 @@ function render(){
   const chips=document.getElementById('chips');
   if(!chips.dataset.built){let h='<button data-r="__all__" class="on">Tutte</button>';DATA.rooms.forEach(r=>h+='<button data-r="'+r.name+'">'+r.name+'</button>');chips.innerHTML=h;chips.dataset.built='1';
     chips.querySelectorAll('button').forEach(b=>b.onclick=()=>{room=b.dataset.r;chips.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));render();});}
-  const rows=DATA.rooms.map(r=>{const c=sum(serie(r.cooling?.[p],p)),h=sum(serie(r.heating?.[p],p));return{r,c,h,tot:c+h};}).sort((a,b)=>b.tot-a.tot);
+  const rows=DATA.rooms.map(r=>{const c=valPeriodo(r.cooling?.[p],p),h=valPeriodo(r.heating?.[p],p);return{r,c,h,tot:c+h};}).sort((a,b)=>b.tot-a.tot);
   const cont=document.getElementById('rooms');cont.innerHTML='';
   rows.forEach(o=>{const pc=o.tot>0?o.c/o.tot*100:0,ph=o.tot>0?o.h/o.tot*100:0;const div=document.createElement('div');
     div.className='room'+(room===o.r.name?' sel':'');
-    div.innerHTML='<div style="flex:1;min-width:0"><span class="nm">'+o.r.name+'</span><span class="bd '+o.r.group+'">'+(o.r.group==='azienda'?'AZIENDA':'CASA')+'</span><div class="meta">freddo '+fmt(o.c)+' · caldo '+fmt(o.h)+' kWh'+(p==='m'?' · <b>media '+fmt(o.tot/monthCount())+' kWh/mese</b>':'')+'</div><div class="bar"><i style="width:'+pc+'%;background:#3aa0ff"></i><i style="width:'+ph+'%;background:#ff7a45"></i></div></div><div class="rt"><div class="e">'+fmtE(o.tot*tariff)+'</div><div class="k">'+fmt(o.tot)+' kWh</div></div>';
+    div.innerHTML='<div style="flex:1;min-width:0"><span class="nm">'+o.r.name+'</span><span class="bd '+o.r.group+'">'+(o.r.group==='azienda'?'AZIENDA':'CASA')+'</span><div class="meta">freddo '+fmt(o.c)+' · caldo '+fmt(o.h)+' kWh'+'</div><div class="bar"><i style="width:'+pc+'%;background:#3aa0ff"></i><i style="width:'+ph+'%;background:#ff7a45"></i></div></div><div class="rt"><div class="e">'+fmtE(o.tot*tariff)+'</div><div class="k">'+fmt(o.tot)+' kWh</div></div>';
     div.onclick=()=>{room=o.r.name;document.querySelectorAll('#chips button').forEach(x=>x.classList.toggle('on',x.dataset.r===o.r.name));render();window.scrollTo({top:0,behavior:'smooth'});};
     cont.appendChild(div);});
   document.getElementById('foot').innerHTML='Dati API Daikin Onecta (stima, split a parete) · '+DATA.rooms.length+' unità · per il consumo elettrico reale: Shelly';
 }
 document.getElementById('seg').querySelectorAll('button').forEach(b=>b.onclick=()=>{period=b.dataset.p;document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x===b));render();});
+document.getElementById('monthSel').addEventListener('change',e=>{selMonth=parseInt(e.target.value,10);render();});
 document.getElementById('tariff').addEventListener('change',e=>{const v=parseFloat(e.target.value);if(v>0){tariff=v;try{localStorage.setItem('clima_tariff',v);}catch(e){}render();}});
 fetch('clima.json?t='+Date.now()).then(r=>r.json()).then(d=>{DATA=d;now=new Date(d.generatedAt);tariff=tariff||d.tariffDefault||0.28;render();}).catch(()=>{document.getElementById('sub').textContent='Dati clima non disponibili';});
 </script>
