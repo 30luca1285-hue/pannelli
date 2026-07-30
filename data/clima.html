@@ -65,6 +65,15 @@ const CP={d:{rooms:'oggi',slots:12,title:'Consumo per fascia di 2 ore (oggi)'},w
 let DATA=null,period='d',room='__all__',tariff=0.28,chart=null,now=new Date();
 try{const t=parseFloat(localStorage.getItem('clima_tariff'));if(t>0)tariff=t;}catch(e){}
 const monthCount=()=>12+now.getMonth()+1; // gen anno scorso → mese corrente
+// ⚠️ FIX 30/07/2026 — in vista "m" i totali NON sono di un mese: sommano tutti i mesi
+// da gennaio dell'anno scorso a oggi (19 a luglio 2026). L'etichetta diceva "mensile"
+// e faceva sembrare mensile un totale di quasi 2 anni. Ora l'etichetta dice il vero
+// periodo e ogni stanza mostra anche la MEDIA per mese, che è il dato che serve.
+const periodoLab=p=>{
+  if(p!=='m')return CP[p].rooms;
+  const mc=monthCount(),Y=now.getFullYear();
+  return mc+' mesi ('+MESI[0]+' '+String(Y-1).slice(2)+'–'+MESI[now.getMonth()]+' '+String(Y).slice(2)+')';
+};
 const serie=(a,p)=>{a=a||[];if(p==='d')return a.slice(12,24);if(p==='m')return a.slice(0,monthCount());return a.slice();};
 const active=()=>room==='__all__'?DATA.rooms:DATA.rooms.filter(r=>r.name===room);
 function labels(p){const n=CP[p].slots,o=[];
@@ -75,8 +84,8 @@ const agg=(rooms,mode,p)=>{const out=new Array(p==='d'?12:(p==='m'?monthCount():
 function render(){
   const p=period;
   document.getElementById('sub').textContent='Aggiornato '+now.toLocaleString('it-IT',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})+' · stima Daikin per stanza';
-  document.getElementById('roomsPerLab').textContent=CP[p].rooms;
-  document.getElementById('kpiPerLab').textContent='Totale '+CP[p].rooms;
+  document.getElementById('roomsPerLab').textContent=periodoLab(p);
+  document.getElementById('kpiPerLab').textContent='Totale '+periodoLab(p);
   document.getElementById('tariff').value=tariff;
   const act=active();let cool=0,heat=0,az=0,ca=0;
   DATA.rooms.forEach(r=>{const t=sum(serie(r.cooling?.[p],p))+sum(serie(r.heating?.[p],p));if(r.group==='azienda')az+=t;else ca+=t;});
@@ -101,7 +110,7 @@ function render(){
   const cont=document.getElementById('rooms');cont.innerHTML='';
   rows.forEach(o=>{const pc=o.tot>0?o.c/o.tot*100:0,ph=o.tot>0?o.h/o.tot*100:0;const div=document.createElement('div');
     div.className='room'+(room===o.r.name?' sel':'');
-    div.innerHTML='<div style="flex:1;min-width:0"><span class="nm">'+o.r.name+'</span><span class="bd '+o.r.group+'">'+(o.r.group==='azienda'?'AZIENDA':'CASA')+'</span><div class="meta">freddo '+fmt(o.c)+' · caldo '+fmt(o.h)+' kWh</div><div class="bar"><i style="width:'+pc+'%;background:#3aa0ff"></i><i style="width:'+ph+'%;background:#ff7a45"></i></div></div><div class="rt"><div class="e">'+fmtE(o.tot*tariff)+'</div><div class="k">'+fmt(o.tot)+' kWh</div></div>';
+    div.innerHTML='<div style="flex:1;min-width:0"><span class="nm">'+o.r.name+'</span><span class="bd '+o.r.group+'">'+(o.r.group==='azienda'?'AZIENDA':'CASA')+'</span><div class="meta">freddo '+fmt(o.c)+' · caldo '+fmt(o.h)+' kWh'+(p==='m'?' · <b>media '+fmt(o.tot/monthCount())+' kWh/mese</b>':'')+'</div><div class="bar"><i style="width:'+pc+'%;background:#3aa0ff"></i><i style="width:'+ph+'%;background:#ff7a45"></i></div></div><div class="rt"><div class="e">'+fmtE(o.tot*tariff)+'</div><div class="k">'+fmt(o.tot)+' kWh</div></div>';
     div.onclick=()=>{room=o.r.name;document.querySelectorAll('#chips button').forEach(x=>x.classList.toggle('on',x.dataset.r===o.r.name));render();window.scrollTo({top:0,behavior:'smooth'});};
     cont.appendChild(div);});
   document.getElementById('foot').innerHTML='Dati API Daikin Onecta (stima, split a parete) · '+DATA.rooms.length+' unità · per il consumo elettrico reale: Shelly';
