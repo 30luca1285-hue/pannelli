@@ -1,0 +1,26 @@
+[
+  {
+    "ym": "2026-06",
+    "kwh_eff": 576,
+    "materia": 122,
+    "gse": 181.43,
+    "bolletta": 0,
+    "nota": "Salvato dall'app il 2026-07-11 13:09"
+  },
+  {
+    "ym": "2026-07",
+    "kwh_eff": 829,
+    "materia": 194,
+    "gse": 0,
+    "bolletta": 0,
+    "nota": "Salvato dall'app il 2026-08-12 20:27"
+  },
+  {
+    "ym": "2026-08",
+    "kwh_eff": 0,
+    "materia": 0,
+    "gse": 0,
+    "bolletta": 0,
+    "nota": "Salvato dall'app il 2026-08-12 20:27"
+  }
+]

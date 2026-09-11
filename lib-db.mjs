@@ -19,6 +19,10 @@ export function openDb(dbPath) {
     CREATE TABLE IF NOT EXISTS clima_monthly(
       ym TEXT, room TEXT, cooling REAL, heating REAL, PRIMARY KEY(ym,room));
   `);
+  // colonne aggiunte dopo la v1 (energia + autosufficienza per i grafici Live 24h) — ALTER idempotente
+  for (const col of ['energy_pv REAL', 'self_sufficiency REAL']) {
+    try { db.exec(`ALTER TABLE solar_live ADD COLUMN ${col}`); } catch {}
+  }
   return db;
 }
 

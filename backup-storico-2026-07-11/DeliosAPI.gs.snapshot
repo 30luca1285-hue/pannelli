@@ -1,0 +1,877 @@
+// ============================================================
+// 🔌 DELIOS API INTEGRATION — Google Apps Script
+// ============================================================
+// Questo script si collega al portale Delios per leggere
+// i dati real-time dell'inverter e salvarli su Google Sheets.
+//
+// SETUP:
+// 1. Apri Google Sheets → Estensioni → Apps Script
+// 2. Copia questo file come "DeliosAPI.gs"
+// 3. Configura le credenziali nella funzione getConfig()
+// 4. Esegui setupDelios() una volta per creare i fogli
+// 5. Imposta un trigger temporizzato per fetchDeliosData()
+// ============================================================
+
+// ==================== CONFIGURAZIONE ====================
+
+function getConfig() {
+  // ⚠️ MODIFICA QUESTI VALORI con le tue credenziali Delios
+  return {
+    EMAIL: "info@aziendaagrariagalluzzi.it",  // La tua email Delios
+    PASSWORD: "Superbike",  // La tua password Delios
+    PLANT_ID: 1463,                              // Il tuo plant_id
+    BASE_URL: "https://webportal-backend.delios-srl.it",
+    
+    // Nomi dei fogli su Google Sheets
+    SHEET_LIVE: "Delios_Live",        // Dati real-time (ultimo valore)
+    SHEET_STORICO: "Delios_Storico",  // Log storico ogni 15 minuti
+    SHEET_GIORNALIERO: "Delios_Giornaliero", // Riepilogo giornaliero
+    SHEET_TOKEN: "Delios_Config",     // Token storage (nascosto)
+  };
+}
+
+
+// ==================== SETUP INIZIALE ====================
+
+/**
+ * Esegui questa funzione UNA VOLTA per creare i fogli necessari
+ * e impostare il trigger automatico.
+ */
+function setupDelios() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const config = getConfig();
+  
+  // 1. Crea foglio Live
+  let sheetLive = ss.getSheetByName(config.SHEET_LIVE);
+  if (!sheetLive) {
+    sheetLive = ss.insertSheet(config.SHEET_LIVE);
+    sheetLive.getRange("A1:B1").setValues([["Parametro", "Valore"]]);
+    sheetLive.getRange("A2:A14").setValues([
+      ["Ultimo aggiornamento"],
+      ["Potenza PV (kW)"],
+      ["Potenza Batteria (kW)"],
+      ["Potenza Rete (kW)"],
+      ["Potenza Casa (kW)"],
+      ["Energia PV oggi (kWh)"],
+      ["Energia Batteria Scarica (kWh)"],
+      ["Energia Batteria Carica (kWh)"],
+      ["Energia Rete Consumata (kWh)"],
+      ["Energia Immessa Rete (kWh)"],
+      ["Energia Casa (kWh)"],
+      ["Autosufficienza (%)"],
+      ["Batteria (%)"]
+    ]);
+    sheetLive.getRange("A1:B1").setFontWeight("bold");
+    sheetLive.setColumnWidth(1, 250);
+    sheetLive.setColumnWidth(2, 150);
+    // Colori header
+    sheetLive.getRange("A1:B1").setBackground("#F5A623").setFontColor("#0A1628");
+  }
+  
+  // 2. Crea foglio Storico (log ogni 15 min)
+  let sheetStorico = ss.getSheetByName(config.SHEET_STORICO);
+  if (!sheetStorico) {
+    sheetStorico = ss.insertSheet(config.SHEET_STORICO);
+    sheetStorico.getRange("A1:M1").setValues([[
+      "Timestamp",
+      "Potenza PV (kW)", "Potenza Batt (kW)", "Potenza Rete (kW)", "Potenza Casa (kW)",
+      "Energia PV (kWh)", "Energia Batt Scarica", "Energia Batt Carica",
+      "Energia Rete Cons.", "Energia Immessa", "Energia Casa (kWh)",
+      "Autosufficienza (%)", "Batteria (%)"
+    ]]);
+    sheetStorico.getRange("A1:M1").setFontWeight("bold");
+    sheetStorico.getRange("A1:M1").setBackground("#2ECC71").setFontColor("#0A1628");
+    sheetStorico.setFrozenRows(1);
+  }
+  
+  // 3. Crea foglio Giornaliero
+  let sheetGiorn = ss.getSheetByName(config.SHEET_GIORNALIERO);
+  if (!sheetGiorn) {
+    sheetGiorn = ss.insertSheet(config.SHEET_GIORNALIERO);
+    sheetGiorn.getRange("A1:H1").setValues([[
+      "Data",
+      "Energia PV (kWh)", "Energia Casa (kWh)",
+      "Energia Rete Cons. (kWh)", "Energia Immessa (kWh)",
+      "Autosufficienza Max (%)", "Batteria Max (%)",
+      "N. Letture"
+    ]]);
+    sheetGiorn.getRange("A1:H1").setFontWeight("bold");
+    sheetGiorn.getRange("A1:H1").setBackground("#3498DB").setFontColor("#FFFFFF");
+    sheetGiorn.setFrozenRows(1);
+  }
+  
+  // 4. Crea foglio Config (token)
+  let sheetConfig = ss.getSheetByName(config.SHEET_TOKEN);
+  if (!sheetConfig) {
+    sheetConfig = ss.insertSheet(config.SHEET_TOKEN);
+    sheetConfig.getRange("A1:B1").setValues([["Chiave", "Valore"]]);
+    sheetConfig.getRange("A2:A3").setValues([["token"], ["token_expiry"]]);
+    sheetConfig.hideSheet(); // Nascondi il foglio
+  }
+  
+  // 5. Imposta trigger automatico ogni 15 minuti
+  deleteTriggers_("fetchDeliosData");
+  ScriptApp.newTrigger("fetchDeliosData")
+    .timeBased()
+    .everyMinutes(15)
+    .create();
+  
+  // 6. Imposta trigger giornaliero per riepilogo
+  deleteTriggers_("dailySummary");
+  ScriptApp.newTrigger("dailySummary")
+    .timeBased()
+    .atHour(23)
+    .nearMinute(50)
+    .everyDays(1)
+    .create();
+  
+  // 7. Test immediato
+  Logger.log("✅ Setup completato! Fogli creati e trigger impostati.");
+  Logger.log("🔄 Eseguo prima lettura...");
+  fetchDeliosData();
+  Logger.log("✅ Prima lettura completata!");
+  
+  SpreadsheetApp.getUi().alert(
+    "✅ Setup Delios completato!\n\n" +
+    "• Fogli creati: " + config.SHEET_LIVE + ", " + config.SHEET_STORICO + ", " + config.SHEET_GIORNALIERO + "\n" +
+    "• Trigger: ogni 15 minuti + riepilogo giornaliero\n" +
+    "• Prima lettura eseguita!\n\n" +
+    "⚠️ Ricordati di inserire la tua password in getConfig()!"
+  );
+}
+
+
+// ==================== AUTENTICAZIONE ====================
+
+/**
+ * Ottieni un token JWT valido.
+ * Se il token salvato è ancora valido, lo riusa.
+ * Altrimenti fa un nuovo login.
+ */
+function getToken_() {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheetConfig = ss.getSheetByName(config.SHEET_TOKEN);
+  
+  if (!sheetConfig) {
+    setupDelios();
+    sheetConfig = ss.getSheetByName(config.SHEET_TOKEN);
+  }
+  
+  // Controlla se abbiamo un token valido salvato
+  const savedToken = sheetConfig.getRange("B2").getValue();
+  const savedExpiry = sheetConfig.getRange("B3").getValue();
+  
+  if (savedToken && savedExpiry) {
+    const expiryDate = new Date(savedExpiry);
+    const now = new Date();
+    // Se il token scade tra più di 1 ora, riusalo
+    if (expiryDate.getTime() - now.getTime() > 3600000) {
+      return savedToken;
+    }
+  }
+  
+  // Fai login per ottenere nuovo token
+  Logger.log("🔑 Richiedo nuovo token Delios...");
+  
+  const response = UrlFetchApp.fetch(config.BASE_URL + "/authenticate", {
+    method: "POST",
+    contentType: "application/json",
+    payload: JSON.stringify({
+      email: config.EMAIL,
+      password: config.PASSWORD
+    }),
+    muteHttpExceptions: true
+  });
+  
+  if (response.getResponseCode() !== 200) {
+    throw new Error("❌ Login Delios fallito! Codice: " + response.getResponseCode() + 
+                    " - Controlla email e password in getConfig()");
+  }
+  
+  const data = JSON.parse(response.getContentText());
+  const token = data.token;
+  
+  if (!token) {
+    throw new Error("❌ Nessun token nella risposta Delios");
+  }
+  
+  // Decodifica scadenza dal JWT
+  const payload = JSON.parse(Utilities.newBlob(
+    Utilities.base64Decode(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))
+  ).getDataAsString());
+  
+  const expiry = new Date(payload.exp * 1000);
+  
+  // Salva token e scadenza
+  sheetConfig.getRange("B2").setValue(token);
+  sheetConfig.getRange("B3").setValue(expiry.toISOString());
+  
+  Logger.log("✅ Token ottenuto, scade: " + expiry.toLocaleString());
+  return token;
+}
+
+
+// ==================== FETCH DATI ====================
+
+/**
+ * Funzione principale: legge i dati dall'inverter Delios
+ * e li scrive nei fogli Google Sheets.
+ * Viene eseguita automaticamente ogni 15 minuti.
+ */
+function fetchDeliosData() {
+  const config = getConfig();
+  
+  try {
+    // 1. Ottieni token
+    const token = getToken_();
+    
+    // 2. Chiama API dati generali
+    const response = UrlFetchApp.fetch(
+      config.BASE_URL + "/machine_logs/get_machine_log_general",
+      {
+        method: "POST",
+        contentType: "application/json",
+        headers: {
+          "Authorization": "Bearer " + token
+        },
+        payload: JSON.stringify({
+          plant_id: config.PLANT_ID,
+          machine_id: ""
+        }),
+        muteHttpExceptions: true
+      }
+    );
+    
+    if (response.getResponseCode() !== 200) {
+      Logger.log("⚠️ Errore API Delios: " + response.getResponseCode());
+      return;
+    }
+    
+    const data = JSON.parse(response.getContentText());
+    const now = new Date();
+    const timestamp = Utilities.formatDate(now, "Europe/Rome", "yyyy-MM-dd HH:mm:ss");
+    
+    Logger.log("📊 Dati ricevuti: PV=" + data.powerpv + "kW, Casa=" + data.powerhouse + 
+               "kW, Rete=" + data.powergrid + "kW, Batt=" + data.percentbattery + "%");
+    
+    // 3. Aggiorna foglio Live
+    updateLiveSheet_(data, timestamp);
+    
+    // 4. Aggiungi riga allo storico
+    appendToHistory_(data, timestamp);
+    
+    // 5. Prova anche a prendere i dati trend (storico giornaliero)
+    fetchTrendData_(token);
+    
+  } catch (e) {
+    Logger.log("❌ Errore fetchDeliosData: " + e.message);
+  }
+}
+
+
+/**
+ * Aggiorna il foglio "Delios_Live" con i dati correnti
+ */
+function updateLiveSheet_(data, timestamp) {
+  const config = getConfig();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config.SHEET_LIVE);
+  if (!sheet) return;
+  
+  sheet.getRange("B2:B14").setValues([
+    [timestamp],
+    [data.powerpv || 0],
+    [data.powerbatt || 0],
+    [data.powergrid || 0],
+    [data.powerhouse || 0],
+    [data.energy_pv || 0],
+    [data.energy_battery_discha || 0],
+    [data.energy_battery_char || 0],
+    [data.energy_grid_consumed || 0],
+    [data.energy_grid_feed_in || 0],
+    [data.energy_powerhouse || 0],
+    [data.self_sufficiency || 0],
+    [data.percentbattery || 0]
+  ]);
+}
+
+
+/**
+ * Aggiungi una riga al foglio storico (log ogni 15 min)
+ */
+function appendToHistory_(data, timestamp) {
+  const config = getConfig();
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(config.SHEET_STORICO);
+  if (!sheet) return;
+  
+  sheet.appendRow([
+    timestamp,
+    data.powerpv || 0,
+    data.powerbatt || 0,
+    data.powergrid || 0,
+    data.powerhouse || 0,
+    data.energy_pv || 0,
+    data.energy_battery_discha || 0,
+    data.energy_battery_char || 0,
+    data.energy_grid_consumed || 0,
+    data.energy_grid_feed_in || 0,
+    data.energy_powerhouse || 0,
+    data.self_sufficiency || 0,
+    data.percentbattery || 0
+  ]);
+  
+  // La pulizia è gestita da cleanupStorico() (mantiene ultime 48h)
+}
+
+
+/**
+ * Fetch dati trend (storico dal portale)
+ */
+function fetchTrendData_(token) {
+  const config = getConfig();
+  
+  try {
+    const response = UrlFetchApp.fetch(
+      config.BASE_URL + "/machine_logs/get_machine_log_trend",
+      {
+        method: "POST",
+        contentType: "application/json",
+        headers: {
+          "Authorization": "Bearer " + token
+        },
+        payload: JSON.stringify({
+          plant_id: config.PLANT_ID,
+          machine_id: "",
+          type: "day"  // prova day, week, month, year
+        }),
+        muteHttpExceptions: true
+      }
+    );
+    
+    if (response.getResponseCode() === 200) {
+      const trendData = JSON.parse(response.getContentText());
+      Logger.log("📈 Trend data ricevuti: " + JSON.stringify(trendData).substring(0, 200));
+      // I dati trend verranno usati nella dashboard per i grafici
+    }
+  } catch (e) {
+    Logger.log("⚠️ Trend data non disponibili: " + e.message);
+  }
+}
+
+
+// ==================== RIEPILOGO GIORNALIERO ====================
+
+/**
+ * Crea un riepilogo giornaliero dai dati dello storico.
+ * Viene eseguito automaticamente alle 23:50.
+ */
+function dailySummary() {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetStorico = ss.getSheetByName(config.SHEET_STORICO);
+  const sheetGiorn = ss.getSheetByName(config.SHEET_GIORNALIERO);
+  
+  if (!sheetStorico || !sheetGiorn) return;
+  
+  const oggi = Utilities.formatDate(new Date(), "Europe/Rome", "yyyy-MM-dd");
+  const data = sheetStorico.getDataRange().getValues();
+  
+  // Filtra righe di oggi
+  const righeOggi = data.filter((row, i) => {
+    if (i === 0) return false; // skip header
+    return String(row[0]).startsWith(oggi);
+  });
+  
+  if (righeOggi.length === 0) {
+    Logger.log("⚠️ Nessun dato per oggi " + oggi);
+    return;
+  }
+  
+  // Prendi l'ultimo valore di energia (è cumulativo nella giornata)
+  const ultima = righeOggi[righeOggi.length - 1];
+  
+  // Calcola max autosufficienza e batteria
+  const maxAutoSuff = Math.max(...righeOggi.map(r => r[11] || 0));
+  const maxBatt = Math.max(...righeOggi.map(r => r[12] || 0));
+  
+  // Controlla se esiste già una riga per oggi
+  const giornData = sheetGiorn.getDataRange().getValues();
+  let rigaEsistente = -1;
+  for (let i = 1; i < giornData.length; i++) {
+    if (String(giornData[i][0]).startsWith(oggi)) {
+      rigaEsistente = i + 1; // +1 perché Sheet è 1-indexed
+      break;
+    }
+  }
+  
+  const rowData = [
+    oggi,
+    ultima[5],   // Energia PV
+    ultima[10],  // Energia Casa
+    ultima[8],   // Energia Rete Consumata
+    ultima[9],   // Energia Immessa
+    maxAutoSuff, // Autosufficienza max
+    maxBatt,     // Batteria max
+    righeOggi.length // N. letture
+  ];
+  
+  if (rigaEsistente > 0) {
+    sheetGiorn.getRange(rigaEsistente, 1, 1, 8).setValues([rowData]);
+  } else {
+    sheetGiorn.appendRow(rowData);
+  }
+  
+  Logger.log("📅 Riepilogo giornaliero salvato per " + oggi);
+
+  // Pulisci lo storico mantenendo solo le ultime 48h
+  cleanupStorico();
+}
+
+
+// ==================== API PER LA DASHBOARD ====================
+
+/**
+ * Funzione chiamata dalla dashboard HTML per ottenere i dati live.
+ * Restituisce un oggetto JSON con tutti i dati correnti.
+ */
+function getDeliosLiveData() {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(config.SHEET_LIVE);
+  
+  if (!sheet) return { error: "Foglio Live non trovato. Esegui setupDelios()." };
+  
+  const values = sheet.getRange("B2:B14").getValues();
+  
+  return {
+    timestamp: values[0][0],
+    powerpv: values[1][0],
+    powerbatt: values[2][0],
+    powergrid: values[3][0],
+    powerhouse: values[4][0],
+    energy_pv: values[5][0],
+    energy_battery_discha: values[6][0],
+    energy_battery_char: values[7][0],
+    energy_grid_consumed: values[8][0],
+    energy_grid_feed_in: values[9][0],
+    energy_powerhouse: values[10][0],
+    self_sufficiency: values[11][0],
+    percentbattery: values[12][0]
+  };
+}
+
+
+/**
+ * Restituisce le ultime N ore di dati storici per i grafici.
+ */
+function getDeliosHistory(hours) {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(config.SHEET_STORICO);
+  
+  if (!sheet) return { error: "Foglio Storico non trovato." };
+  
+  hours = hours || 24;
+  const cutoff = new Date();
+  cutoff.setHours(cutoff.getHours() - hours);
+  
+  const data = sheet.getDataRange().getValues();
+  const header = data[0];
+  const rows = [];
+  
+  for (let i = data.length - 1; i >= 1; i--) {
+    const ts = new Date(data[i][0]);
+    if (ts < cutoff) break;
+    rows.unshift({
+      timestamp: data[i][0],
+      powerpv: data[i][1],
+      powerbatt: data[i][2],
+      powergrid: data[i][3],
+      powerhouse: data[i][4],
+      energy_pv: data[i][5],
+      self_sufficiency: data[i][11],
+      percentbattery: data[i][12]
+    });
+  }
+  
+  return rows;
+}
+
+
+/**
+ * Aggrega Delios_Giornaliero per mese e restituisce totali mensili.
+ * Usato dalla dashboard GitHub Pages per auto-popolare la sezione Mensile.
+ */
+function getDeliosMonthly() {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(config.SHEET_GIORNALIERO);
+  if (!sheet) return [];
+
+  const mesiNomi = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
+                    "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+  const data = sheet.getDataRange().getValues();
+  const byMonth = {};
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const dateVal = row[0];
+    if (!dateVal) continue;
+
+    let anno, mese;
+    if (dateVal instanceof Date) {
+      anno = dateVal.getFullYear();
+      mese = dateVal.getMonth(); // 0-indexed
+    } else {
+      const s = String(dateVal);
+      if (s.length < 7) continue;
+      anno = parseInt(s.substring(0, 4));
+      mese = parseInt(s.substring(5, 7)) - 1;
+    }
+
+    const key = anno + '-' + mese;
+    if (!byMonth[key]) {
+      byMonth[key] = { anno, mese: mesiNomi[mese], produzione: 0, immessa_raw: 0, da_rete: 0 };
+    }
+    // Giornaliero: data, energia_pv, energia_casa(=consumo totale), energia_rete, energia_immessa(può essere negativa)
+    byMonth[key].produzione  += Number(row[1]) || 0;
+    byMonth[key].da_rete     += Number(row[3]) || 0;
+    byMonth[key].immessa_raw += Number(row[4]) || 0; // può essere negativa (Delios convention)
+  }
+
+  const result = Object.values(byMonth).map(m => {
+    const immessa     = Math.abs(Math.round(m.immessa_raw));
+    const produzione  = Math.round(m.produzione);
+    const autoconsumo = Math.max(0, produzione - immessa); // PV usato in casa
+    return { anno: m.anno, mese: m.mese, produzione, autoconsumo, da_rete: Math.round(m.da_rete), immessa };
+  });
+
+  result.sort((a, b) => a.anno !== b.anno ? a.anno - b.anno : mesiNomi.indexOf(a.mese) - mesiNomi.indexOf(b.mese));
+  return result;
+}
+
+
+/**
+ * Restituisce il riepilogo giornaliero degli ultimi N giorni.
+ */
+function getDeliosDailySummary(days) {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(config.SHEET_GIORNALIERO);
+  
+  if (!sheet) return { error: "Foglio Giornaliero non trovato." };
+  
+  days = days || 30;
+  const data = sheet.getDataRange().getValues();
+  const rows = [];
+  
+  const startIdx = Math.max(1, data.length - days);
+  for (let i = startIdx; i < data.length; i++) {
+    rows.push({
+      data: data[i][0],
+      energia_pv: data[i][1],
+      energia_casa: data[i][2],
+      energia_rete: data[i][3],
+      energia_immessa: data[i][4],
+      autosufficienza: data[i][5],
+      batteria_max: data[i][6],
+      letture: data[i][7]
+    });
+  }
+  
+  return rows;
+}
+
+
+// ==================== PREZZI ENERGIA ====================
+
+/**
+ * Legge i prezzi energia dal foglio Delios_Config.
+ * Restituisce {acquisto, vendita} in €/kWh.
+ */
+function getEnergyPrices() {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(config.SHEET_TOKEN);
+
+  if (!sheet) return { acquisto: 0.28, vendita: 0.10 };
+
+  const acquisto = sheet.getRange("B4").getValue();
+  const vendita = sheet.getRange("B5").getValue();
+
+  return {
+    acquisto: acquisto || 0.28,
+    vendita: vendita || 0.10
+  };
+}
+
+/**
+ * Salva i prezzi energia nel foglio Delios_Config.
+ * Chiamata dalla dashboard quando l'utente modifica i prezzi.
+ */
+function saveEnergyPrices(acquisto, vendita) {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(config.SHEET_TOKEN);
+
+  if (!sheet) return { error: "Foglio Config non trovato." };
+
+  // Assicura che le etichette esistano
+  sheet.getRange("A4").setValue("prezzo_acquisto");
+  sheet.getRange("A5").setValue("prezzo_vendita");
+  sheet.getRange("B4").setValue(Number(acquisto));
+  sheet.getRange("B5").setValue(Number(vendita));
+
+  Logger.log("💰 Prezzi salvati: acquisto=" + acquisto + " vendita=" + vendita);
+  return { success: true, acquisto: Number(acquisto), vendita: Number(vendita) };
+}
+
+
+// ==================== PULIZIA STORICO ====================
+
+/**
+ * Pulisce il foglio Delios_Storico mantenendo solo le ultime 48 ore.
+ * Viene chiamata dopo il dailySummary alle 23:50.
+ */
+function cleanupStorico() {
+  const config = getConfig();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(config.SHEET_STORICO);
+
+  if (!sheet) return;
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return; // solo header
+
+  const cutoff = new Date();
+  cutoff.setHours(cutoff.getHours() - 48);
+
+  const data = sheet.getDataRange().getValues();
+  let firstRowToKeep = -1;
+
+  for (let i = 1; i < data.length; i++) {
+    const ts = new Date(data[i][0]);
+    if (ts >= cutoff) {
+      firstRowToKeep = i + 1; // +1 perché Sheet è 1-indexed
+      break;
+    }
+  }
+
+  if (firstRowToKeep > 2) {
+    // Cancella le righe vecchie (dalla riga 2 fino a firstRowToKeep-1)
+    const rowsToDelete = firstRowToKeep - 2;
+    sheet.deleteRows(2, rowsToDelete);
+    Logger.log("🗑️ Storico pulito: eliminate " + rowsToDelete + " righe più vecchie di 48h");
+  } else {
+    Logger.log("✅ Storico OK: nessuna riga da eliminare");
+  }
+}
+
+
+// ==================== ESPLORAZIONE API ====================
+
+/**
+ * Esplora tutti gli endpoint Delios disponibili.
+ * Utile per scoprire nuovi dati.
+ */
+function esploraEndpoints() {
+  const config = getConfig();
+  const token = getToken_();
+  
+  const endpoints = [
+    { name: "machine_log_general", path: "/machine_logs/get_machine_log_general", body: {plant_id: config.PLANT_ID, machine_id: ""} },
+    { name: "machine_log_trend", path: "/machine_logs/get_machine_log_trend", body: {plant_id: config.PLANT_ID, machine_id: "", type: "day"} },
+    { name: "machine_log_trend_week", path: "/machine_logs/get_machine_log_trend", body: {plant_id: config.PLANT_ID, machine_id: "", type: "week"} },
+    { name: "machine_log_trend_month", path: "/machine_logs/get_machine_log_trend", body: {plant_id: config.PLANT_ID, machine_id: "", type: "month"} },
+    { name: "machine_log_trend_year", path: "/machine_logs/get_machine_log_trend", body: {plant_id: config.PLANT_ID, machine_id: "", type: "year"} },
+    { name: "machine_infos", path: "/machine_list/get_machine_infos", body: {plant_id: config.PLANT_ID} },
+    { name: "plant_listById", path: "/plant_list/get_plant_listById", body: {plant_id: config.PLANT_ID} },
+    { name: "machine_list_table", path: "/machine_list/get_machine_list_table_data", body: {plant_id: config.PLANT_ID} },
+  ];
+  
+  endpoints.forEach(ep => {
+    try {
+      const resp = UrlFetchApp.fetch(config.BASE_URL + ep.path, {
+        method: "POST",
+        contentType: "application/json",
+        headers: { "Authorization": "Bearer " + token },
+        payload: JSON.stringify(ep.body),
+        muteHttpExceptions: true
+      });
+      Logger.log("📡 " + ep.name + " [" + resp.getResponseCode() + "]: " + 
+                 resp.getContentText().substring(0, 500));
+    } catch (e) {
+      Logger.log("❌ " + ep.name + ": " + e.message);
+    }
+  });
+}
+
+
+// ==================== UTILITÀ ====================
+
+/**
+ * Elimina trigger esistenti per una funzione specifica
+ */
+function deleteTriggers_(functionName) {
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    if (trigger.getHandlerFunction() === functionName) {
+      ScriptApp.deleteTrigger(trigger);
+    }
+  });
+}
+
+
+/**
+ * Menu personalizzato nell'interfaccia Sheets
+ */
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu("☀️ Delios Solar")
+    .addItem("⚙️ Setup iniziale", "setupDelios")
+    .addItem("🔄 Aggiorna dati ora", "fetchDeliosData")
+    .addItem("📅 Riepilogo giornaliero", "dailySummary")
+    .addItem("🔍 Esplora endpoint API", "esploraEndpoints")
+    .addSeparator()
+    .addItem("🗑️ Rimuovi trigger automatici", "removeAllTriggers")
+    .addToUi();
+}
+
+function removeAllTriggers() {
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    ScriptApp.deleteTrigger(trigger);
+  });
+  SpreadsheetApp.getUi().alert("✅ Tutti i trigger rimossi.");
+}
+// ==================== MENSILE 2026 — PERSISTENZA DATI ====================
+
+/**
+ * Restituisce (o crea) il foglio "Mensile_2026".
+ * Intestazioni: Anno | Mese | Produzione | Autoconsumo | Da_Rete | Immessa | kWh_Eff | Materia_€ | GSE_€ | Bolletta_€
+ */
+function getOrCreateMensile2026Sheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('Mensile_2026');
+  if (!sheet) {
+    sheet = ss.insertSheet('Mensile_2026');
+    sheet.getRange('A1:J1').setValues([['Anno','Mese','Produzione','Autoconsumo','Da_Rete','Immessa','kWh_Eff','Materia_€','GSE_€','Bolletta_€']]);
+    sheet.getRange('A1:J1').setFontWeight('bold');
+    sheet.getRange('A1:J1').setBackground('#9B59B6').setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 60);
+    sheet.setColumnWidth(2, 100);
+    Logger.log('✅ Foglio Mensile_2026 creato');
+  }
+  return sheet;
+}
+
+/**
+ * Legge tutte le righe di Mensile_2026 e le restituisce come array JSON.
+ * Chiamata dal frontend con ?action=loadMensile2026
+ */
+function loadMensile2026() {
+  const sheet = getOrCreateMensile2026Sheet_();
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return [];
+  const result = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0] || !r[1]) continue;
+    result.push({
+      anno:       Number(r[0]),
+      mese:       String(r[1]),
+      produzione: Number(r[2]) || 0,
+      autoconsumo:Number(r[3]) || 0,
+      da_rete:    Number(r[4]) || 0,
+      immessa:    Number(r[5]) || 0,
+      kwh_eff:    Number(r[6]) || 0,
+      materia:    Number(r[7]) || 0,
+      gse:        Number(r[8]) || 0,
+      bolletta:   Number(r[9]) || 0
+    });
+  }
+  return result;
+}
+
+/**
+ * Upsert di una riga in Mensile_2026.
+ * Chiamata dal frontend con ?action=saveMensile2026&anno=...&mese=...&...
+ */
+function saveMensile2026_(params) {
+  const sheet = getOrCreateMensile2026Sheet_();
+  const anno       = parseInt(params.anno);
+  const mese       = String(params.mese);
+  const produzione = parseFloat(params.produzione) || 0;
+  const autoconsumo= parseFloat(params.autoconsumo) || 0;
+  const da_rete    = parseFloat(params.da_rete) || 0;
+  const immessa    = parseFloat(params.immessa) || 0;
+  const kwh_eff    = parseFloat(params.kwh_eff) || 0;
+  const materia    = parseFloat(params.materia) || 0;
+  const gse        = parseFloat(params.gse) || 0;
+  const bolletta   = parseFloat(params.bolletta) || 0;
+
+  const rowData = [anno, mese, produzione, autoconsumo, da_rete, immessa, kwh_eff, materia, gse, bolletta];
+
+  // Upsert: cerca riga con stesso anno+mese
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (Number(data[i][0]) === anno && String(data[i][1]) === mese) {
+      sheet.getRange(i + 1, 1, 1, 10).setValues([rowData]);
+      Logger.log('✏️ Mensile_2026 aggiornato: ' + anno + '-' + mese);
+      return { success: true };
+    }
+  }
+  sheet.appendRow(rowData);
+  Logger.log('➕ Mensile_2026 riga aggiunta: ' + anno + '-' + mese);
+  return { success: true };
+}
+
+
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) || '';
+
+  // Nessuna action → serve la dashboard legacy (compatibilità backward)
+  if (!action) {
+    return HtmlService
+      .createHtmlOutputFromFile('Dashboard')
+      .setTitle("Delios Solar Dashboard")
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  }
+
+  // API JSON routing
+  let result;
+  try {
+    switch (action) {
+      case 'live':
+        result = getDeliosLiveData();
+        break;
+      case 'history':
+        result = getDeliosHistory(parseInt(e.parameter.hours) || 24);
+        break;
+      case 'monthly':
+        result = getDeliosMonthly();
+        break;
+      case 'daily':
+        result = getDeliosDailySummary(parseInt(e.parameter.days) || 30);
+        break;
+      case 'prices':
+        result = getEnergyPrices();
+        break;
+      case 'savePrices':
+        result = saveEnergyPrices(e.parameter.acquisto, e.parameter.vendita);
+        break;
+      case 'loadMensile2026':
+        result = loadMensile2026();
+        break;
+      case 'saveMensile2026':
+        result = saveMensile2026_(e.parameter);
+        break;
+      default:
+        result = { error: 'Unknown action: ' + action };
+    }
+  } catch (err) {
+    result = { error: err.message };
+  }
+
+  return ContentService
+    .createTextOutput(JSON.stringify(result))
+    .setMimeType(ContentService.MimeType.JSON);
+}

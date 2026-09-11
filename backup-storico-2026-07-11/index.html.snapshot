@@ -234,12 +234,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div class="amm-section"><div class="amm-header"><div><div class="amm-title">💰 Ammortamento Investimento</div><div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--text-dim);margin-top:4px;">Investimento iniziale: €24.000</div></div><div style="font-family:'Space Mono',monospace;font-size:22px;font-weight:700;color:var(--green);" id="ammPerc">—</div></div>
 <div class="amm-nums"><div class="amm-num-item"><div class="amm-num-label">Investimento</div><div class="amm-num-value invested">€24.000</div></div><div class="amm-num-item"><div class="amm-num-label">Recuperato</div><div class="amm-num-value recovered" id="ammRecov">—</div></div><div class="amm-num-item"><div class="amm-num-label">Da recuperare</div><div class="amm-num-value remaining" id="ammRemain">—</div></div></div>
 <div class="progress-bar-bg"><div class="progress-bar-fill" id="ammBar" style="width:0%"></div></div>
-<div class="progress-label"><span>Maggio 2022</span><span id="ammPercLabel">0%</span><span>Obiettivo: €0</span></div><div id="ammLastInsert" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);margin-top:6px;text-align:center;"></div>
-<div style="display:flex;gap:6px;margin-top:10px;background:rgba(0,0,0,.2);padding:4px;border-radius:9px;">
-  <button id="ammModeEne" onclick="setAmmMode('ene')" style="flex:1;border:0;background:transparent;color:var(--text-dim);font-family:'Space Mono',monospace;font-size:10.5px;font-weight:700;padding:7px 4px;border-radius:7px;cursor:pointer;">SOLO ENERGIA</button>
-  <button id="ammModeMob" onclick="setAmmMode('mob')" style="flex:1;border:0;background:transparent;color:var(--text-dim);font-family:'Space Mono',monospace;font-size:10.5px;font-weight:700;padding:7px 4px;border-radius:7px;cursor:pointer;">+ MOBILITÀ AUTO</button>
-</div>
-<div id="ammMobNota" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);margin-top:7px;text-align:center;line-height:1.5;"></div></div>
+<div class="progress-label"><span>Maggio 2022</span><span id="ammPercLabel">0%</span><span>Obiettivo: €0</span></div><div id="ammLastInsert" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--text-dim);margin-top:6px;text-align:center;"></div></div>
 <div class="kpi-grid">
 <div class="kpi-card"><div class="kpi-label">⚡ Produzione Totale</div><div class="kpi-value" id="kpi-prod">—</div><div class="kpi-unit">kWh prodotti</div><div class="kpi-sub" id="kpi-prod-sub">—</div></div>
 <div class="kpi-card"><div class="kpi-label">🔋 Autoconsumo Medio</div><div class="kpi-value" id="kpi-auto">—</div><div class="kpi-unit">% produzione consumata</div><div class="kpi-sub">Media su tutti i mesi</div></div>
@@ -383,25 +378,6 @@ let chartMensileInst = null;
 let apiMonthlyData = null;
 let sheetsMonthly2026 = []; // dati caricati da foglio Mensile_2026
 
-// --- Auto elettrica: valore mobilità (tab ⚡ Auto) ---
-// I kWh solari finiti nella ID.3 sono GIÀ dentro l'autoconsumo qui sotto, valorizzati a €/kWh.
-// Come carburante però valgono ~5 volte tanto. In modalità "+ mobilità" si somma SOLO il delta
-// (gasolio evitato − energia già contata), e solo sui kWh presi dal sole: niente doppio conteggio,
-// e le ricariche fatte di notte da rete restano fuori (non le paga l'impianto).
-let autoData = null;
-let ammMode = 'ene';
-try { ammMode = localStorage.getItem('amm_mode') || 'ene'; } catch (e) {}
-
-async function loadAuto() {
-  try { autoData = await (await fetch('auto.json?_=' + Date.now())).json(); }
-  catch (e) { autoData = null; }
-}
-function setAmmMode(m) {
-  ammMode = m;
-  try { localStorage.setItem('amm_mode', m); } catch (e) {}
-  updateAmmortamento();
-}
-
 // --- Ammortamento dinamico ---
 function updateAmmortamento() {
   const saved = getMensileSaved();
@@ -456,25 +432,8 @@ function updateAmmortamento() {
     }
   });
 
-  // valore mobilità: solo il delta sui kWh solari dell'auto (vedi nota sopra)
-  const mob = (autoData && autoData.totali) ? (autoData.totali.delta_ammortamento || 0) : 0;
-  const total = BASE + extra + (ammMode === 'mob' ? mob : 0);
+  const total = BASE + extra;
   const perc = Math.min(total / INVESTIMENTO * 100, 100).toFixed(1);
-
-  // stato dei due bottoni + riga di spiegazione
-  const bE = document.getElementById('ammModeEne'), bM = document.getElementById('ammModeMob');
-  if (bE && bM) {
-    const on = 'background:var(--green);color:#06231a;', off = 'background:transparent;color:var(--text-dim);';
-    bE.setAttribute('style', `flex:1;border:0;font-family:'Space Mono',monospace;font-size:10.5px;font-weight:700;padding:7px 4px;border-radius:7px;cursor:pointer;${ammMode === 'ene' ? on : off}`);
-    bM.setAttribute('style', `flex:1;border:0;font-family:'Space Mono',monospace;font-size:10.5px;font-weight:700;padding:7px 4px;border-radius:7px;cursor:pointer;${ammMode === 'mob' ? on : off}`);
-  }
-  const notaEl = document.getElementById('ammMobNota');
-  if (notaEl) {
-    const km = autoData && autoData.totali ? Math.round(autoData.totali.km) : 0;
-    notaEl.innerHTML = ammMode === 'mob'
-      ? `include €${Math.round(mob).toLocaleString('it-IT')} di valore mobilità<br>(gasolio evitato oltre al prezzo dell'energia, sui soli kWh dal sole)`
-      : (mob > 0 ? `l'auto vale altri €${Math.round(mob).toLocaleString('it-IT')} come gasolio evitato — non contati qui` : '');
-  }
   document.getElementById('ammRecov').textContent = `€${Math.round(total).toLocaleString('it-IT')}`;
   document.getElementById('ammRemain').textContent = `€${Math.round(INVESTIMENTO - total).toLocaleString('it-IT')}`;
   document.getElementById('ammPerc').textContent = `${perc}%`;
@@ -669,17 +628,12 @@ async function fetchMensile2026() {
   });
   if (changed) {
     localStorage.setItem('mensile', JSON.stringify(saved));
+    renderMensile();
   }
-  // ⚠️ 11/09/2026: il ridisegno va fatto SEMPRE, non solo se cambia un dato economico.
-  // Agosto e settembre hanno kwh_eff/materia/gse/bolletta a zero (l'inverter manda i kWh,
-  // la bolletta si inserisce dopo): con `changed` false non si ridisegnava e i mesi
-  // restavano invisibili pur essendo nel database. Luca: «perché sull'app energia non c'è agosto?»
-  renderMensile();
 }
 
 buildYearPills(); renderMensile();
 fetchMonthlyAPI();
-loadAuto().then(updateAmmortamento); // valore mobilità ID.3 nella barra ammortamento
 
 new Chart(document.getElementById('chartConfronto'),{type:'line',data:{labels:mesiNomi,datasets:anni.map(anno=>{const mm={};rawData.filter(d=>d[0]===anno).forEach(d=>mm[d[1]]=d[2]);return{label:anno.toString(),data:mesiNomi.map(m=>mm[m]||null),borderColor:colori[anno],backgroundColor:colori[anno]+'15',tension:0.4,borderWidth:2,pointRadius:3,spanGaps:true,fill:false};})},options:chartOpts});
 
