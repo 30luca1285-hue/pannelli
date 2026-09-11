@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Auto elettrica</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{--bg:#0f1720;--card:#18222e;--card2:#1f2c3a;--line:#2a3848;--txt:#e8eef5;--mut:#90a2b6;
+        --sole:#f5b427;--rete:#5b7a99;--accent:#36c98d;--gas:#ff7a45;--blu:#3aa0ff}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  /* il fondo pagina finiva sotto la barra dei tab della shell: serve aria in più in coda */
+  body{margin:0 auto;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:12px 12px 72px;max-width:680px}
+  .sub{color:var(--mut);font-size:11.5px;margin:0 2px 12px}
+  .seg{display:flex;background:var(--card);border-radius:12px;padding:4px;gap:4px;margin-bottom:12px}
+  .seg button{flex:1;border:0;background:transparent;color:var(--mut);font-size:13px;font-weight:600;padding:9px 4px;border-radius:9px;cursor:pointer}
+  .seg button.on{background:var(--accent);color:#06231a}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 13px}
+  .kpi .lab{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+  .kpi .val{font-size:21px;font-weight:700;margin-top:3px}.kpi .val small{font-size:13px;color:var(--mut);font-weight:500}
+  .kpi .note{color:var(--mut);font-size:11.5px;margin-top:4px}
+  .kpi.big{grid-column:1/-1}
+  .kpi.big .val{font-size:27px;color:var(--accent)}
+  .bar{height:8px;border-radius:5px;background:var(--line);overflow:hidden;display:flex;margin-top:9px;width:100%}
+  .bar i{display:block;height:100%}
+  .legend{display:flex;gap:14px;justify-content:center;font-size:11.5px;color:var(--mut);margin:8px 0 14px;flex-wrap:wrap}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:middle}
+  .chartbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px 8px;margin-bottom:12px}
+  .chartbox .ttl{font-size:13px;font-weight:600;margin:0 4px 8px}.canvas-wrap{position:relative;height:230px;width:100%}
+  .section-h{font-size:13px;color:var(--mut);font-weight:600;margin:18px 4px 9px;text-transform:uppercase;letter-spacing:.04em}
+  .ses{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;gap:10px}
+  .ses.stima{border-left:3px solid var(--mut)}
+  .ses.ok{border-left:3px solid var(--accent)}
+  .ses .nm{font-weight:600;font-size:14px}
+  .ses .meta{color:var(--mut);font-size:11.5px;margin-top:3px}
+  .ses .rt{margin-left:auto;text-align:right;flex:0 0 auto}
+  .ses .rt .e{font-size:16px;font-weight:700}.ses .rt .k{font-size:11px;color:var(--mut)}
+  .acts{display:flex;gap:5px;margin-left:8px}
+  .acts button{border:1px solid var(--line);background:var(--card2);color:var(--mut);border-radius:8px;width:30px;height:30px;font-size:14px;cursor:pointer}
+  .acts button.yes.on{background:rgba(54,201,141,.2);border-color:var(--accent);color:var(--accent)}
+  .acts button.no{color:#e2606a}
+  .box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:12px}
+  .row{display:flex;align-items:center;gap:9px;font-size:13px;margin-bottom:9px}
+  .row:last-child{margin-bottom:0}
+  .row label{flex:1;color:var(--mut)}
+  .row input{width:110px;background:var(--card2);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:7px 9px;font-size:15px;text-align:right}
+  .btn{width:100%;border:0;background:var(--accent);color:#06231a;font-weight:700;font-size:14px;padding:11px;border-radius:10px;cursor:pointer;margin-top:11px}
+  .btn.ghost{background:var(--card2);color:var(--txt);border:1px solid var(--line)}
+  .info{background:rgba(58,160,255,.08);border:1px solid rgba(58,160,255,.25);border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.55;color:#cfe2f5;margin-bottom:12px}
+  .info b{color:#fff}
+  .val-kwh{display:flex;gap:10px;margin-bottom:12px}
+  .val-kwh div{flex:1;background:var(--card);border:1px solid var(--line);border-radius:13px;padding:11px 12px;text-align:center}
+  .val-kwh .n{font-size:20px;font-weight:700;margin-top:2px}
+  .val-kwh .l{font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.03em}
+  .foot{color:var(--mut);font-size:11px;text-align:center;margin-top:18px;line-height:1.5}
+  .empty{color:var(--mut);font-size:13px;text-align:center;padding:22px 10px;line-height:1.6}
+</style>
+</head>
+<body>
+  <div class="sub" id="sub">Carico…</div>
+
+  <div class="seg" id="seg"><button data-p="mese" class="on">Questo mese</button><button data-p="tutto">Da sempre</button></div>
+
+  <div class="cards">
+    <div class="kpi"><div class="lab">Ricariche</div><div class="val" id="kRic">— <small>volte</small></div>
+      <div class="note" id="kRicSub">—</div></div>
+    <div class="kpi"><div class="lab">Energia caricata</div><div class="val" id="kKwh">— <small>kWh</small></div>
+      <div class="note" id="kKm">—</div></div>
+    <div class="kpi"><div class="lab">Speso in ricariche</div><div class="val" id="kCosto">— <small>€</small></div>
+      <div class="note" id="kCostoSub">solo la parte presa dalla rete</div></div>
+    <div class="kpi"><div class="lab">Costo per 100 km</div><div class="val" id="kCento">— <small>€</small></div>
+      <div class="note" id="kCentoSub">—</div></div>
+    <div class="kpi big"><div class="lab">Risparmio netto vs <span id="kSost">Discovery</span></div>
+      <div class="val" id="kRisp">— <small>€</small></div>
+      <div class="note" id="kRispSub">gasolio evitato meno il costo dell'elettricità comprata</div>
+      <div class="bar"><i id="barSole" style="background:var(--sole);width:0%"></i><i id="barRete" style="background:var(--rete);width:0%"></i></div>
+      <div class="note" id="kQuota" style="text-align:center;margin-top:7px">—</div></div>
+  </div>
+
+  <div class="legend">
+    <span><span class="dot" style="background:var(--sole)"></span>dal sole (gratis)</span>
+    <span><span class="dot" style="background:var(--rete)"></span>dalla rete (pagata)</span>
+  </div>
+
+  <div class="section-h">Quanto vale 1 kWh</div>
+  <div class="val-kwh">
+    <div><div class="l">nell'auto</div><div class="n" style="color:var(--gas)" id="vAuto">—</div><div class="l" id="vAutoSub">gasolio evitato</div></div>
+    <div><div class="l">in casa</div><div class="n" id="vCasa">—</div><div class="l">bolletta evitata</div></div>
+    <div><div class="l">in rete</div><div class="n" style="color:var(--mut)" id="vRete">—</div><div class="l">venduto al GSE</div></div>
+  </div>
+  <div class="info" id="infoAmm">—</div>
+
+  <div class="chartbox"><div class="ttl">Ricariche per mese — kWh caricati e spesa</div><div class="canvas-wrap"><canvas id="chart"></canvas></div></div>
+
+  <div class="section-h">Ricariche <span id="sesCount"></span></div>
+  <div id="sessioni"></div>
+
+  <div class="section-h">Contachilometri</div>
+  <div class="box">
+    <div class="row"><label>km sul cruscotto oggi</label><input id="odo" type="number" inputmode="numeric" placeholder="es. 1250"></div>
+    <div class="note" style="color:var(--mut);font-size:11.5px" id="odoNota">Inseriscilo ogni tanto: i km veri battono la stima fatta sui kWh.</div>
+    <button class="btn" onclick="salvaKm()">Salva km</button>
+  </div>
+
+  <div class="section-h">Impostazioni</div>
+  <div class="box">
+    <div class="row"><label>Consumo ID.3 (kWh/100 km)</label><input id="cConsumo" type="number" step="0.1" inputmode="decimal"></div>
+    <div class="row"><label>Batteria (kWh)</label><input id="cBatt" type="number" step="1" inputmode="numeric"></div>
+    <div class="row"><label>Wallbox (kW)</label><input id="cWb" type="number" step="0.1" inputmode="decimal"></div>
+    <div class="row"><label>Discovery (km/litro)</label><input id="cKml" type="number" step="0.1" inputmode="decimal"></div>
+    <div class="row"><label>Gasolio (€/litro)</label><input id="cGas" type="number" step="0.01" inputmode="decimal"></div>
+    <div class="row"><label>Auto in casa dal</label><input id="cData" type="date" style="width:150px"></div>
+    <button class="btn" onclick="salvaConfig()">Salva impostazioni</button>
+  </div>
+
+  <div class="foot" id="foot">—</div>
+
+<script>
+let D = null, periodo = 'mese', chart = null;
+const eur = (n) => '€' + (Math.round(n * 100) / 100).toLocaleString('it-IT', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+const eur0 = (n) => '€' + Math.round(n).toLocaleString('it-IT');
+const nf = (n, d = 1) => (Math.round(n * 10 ** d) / 10 ** d).toLocaleString('it-IT');
+const ymCorrente = () => new Date().toISOString().slice(0, 7);
+
+async function carica() {
+  D = await (await fetch('auto.json?_=' + Date.now())).json();
+  document.getElementById('sub').textContent =
+    `${D.config.modello} · wallbox ${D.config.wallbox_kw} kW · aggiornato ${new Date(D.generatedAt).toLocaleString('it-IT')}`;
+  riempiConfig();
+  render();
+}
+
+function riempiConfig() {
+  const c = D.config;
+  document.getElementById('cConsumo').value = c.consumo_kwh_100km;
+  document.getElementById('cBatt').value = c.batteria_kwh;
+  document.getElementById('cWb').value = c.wallbox_kw;
+  document.getElementById('cKml').value = c.km_litro_sostituita;
+  document.getElementById('cGas').value = c.prezzo_gasolio;
+  document.getElementById('cData').value = c.data_inizio;
+  document.getElementById('kSost').textContent = c.auto_sostituita;
+}
+
+function datiPeriodo() {
+  if (periodo === 'tutto') return { t: D.totali, ses: D.sessioni };
+  const ym = ymCorrente();
+  const m = D.mesi.find(x => x.ym === ym);
+  const ses = D.sessioni.filter(s => s.inizio.slice(0, 7) === ym);
+  const t = m ? {
+    ricariche: m.ricariche, kwh: m.kwh, kwh_sole: m.kwh_sole, kwh_rete: m.kwh_rete,
+    quota_sole: m.kwh ? Math.round(m.kwh_sole / m.kwh * 100) : 0, km: m.km,
+    costo: m.costo, gasolio_evitato: m.gasolio, risparmio: m.risparmio, delta_ammortamento: m.delta_ammortamento,
+  } : { ricariche: 0, kwh: 0, kwh_sole: 0, kwh_rete: 0, quota_sole: 0, km: 0, costo: 0, gasolio_evitato: 0, risparmio: 0, delta_ammortamento: 0 };
+  return { t, ses };
+}
+
+function render() {
+  const { t, ses } = datiPeriodo();
+  const c = D.conversioni;
+
+  document.getElementById('kRic').innerHTML = `${t.ricariche} <small>volte</small>`;
+  document.getElementById('kRicSub').textContent = t.ricariche
+    ? `media ${nf(t.kwh / t.ricariche)} kWh a ricarica` : 'nessuna ricarica rilevata';
+  document.getElementById('kKwh').innerHTML = `${nf(t.kwh)} <small>kWh</small>`;
+  document.getElementById('kKm').textContent = `≈ ${nf(t.km, 0)} km percorsi`;
+  document.getElementById('kCosto').innerHTML = `${nf(t.costo, 2)} <small>€</small>`;
+  document.getElementById('kCostoSub').textContent = t.kwh_rete
+    ? `${nf(t.kwh_rete)} kWh dalla rete a ${nf(c.prezzo_energia, 3)} €/kWh · il resto è sole, gratis`
+    : 'niente comprato dalla rete: tutto sole';
+
+  // quanto costa DAVVERO guidare: solo l'energia che paghi, sui km fatti
+  const per100 = t.km ? t.costo / t.km * 100 : null;
+  const per100Rete = c.km_per_kwh ? c.prezzo_energia * 100 / c.km_per_kwh : null;   // caso peggiore: tutto da rete
+  document.getElementById('kCento').innerHTML = per100 === null ? `— <small>€</small>` : `${nf(per100, 2)} <small>€</small>`;
+  document.getElementById('kCentoSub').innerHTML = per100 === null
+    ? `la ${D.config.auto_sostituita} costa ${nf(c.gasolio_per_km * 100, 2)} €`
+    : `<b>${D.config.auto_sostituita}: ${nf(c.gasolio_per_km * 100, 2)} €</b>` +
+      (per100Rete ? ` · tutto da rete sarebbe ${nf(per100Rete, 2)} €` : '');
+
+  document.getElementById('kRisp').innerHTML = `${nf(t.risparmio, 2)} <small>€</small>`;
+  document.getElementById('kRispSub').innerHTML =
+    `${nf(t.gasolio_evitato, 2)} € di gasolio non comprato (${nf(t.km, 0)} km a ${nf(c.gasolio_per_km, 3)} €/km) ` +
+    `meno ${nf(t.costo, 2)} € di elettricità`;
+
+  const qs = t.kwh ? t.kwh_sole / t.kwh * 100 : 0;
+  document.getElementById('barSole').style.width = qs + '%';
+  document.getElementById('barRete').style.width = (100 - qs) + '%';
+  document.getElementById('kQuota').textContent = t.kwh
+    ? `${Math.round(qs)}% dal sole (${nf(t.kwh_sole)} kWh) · ${100 - Math.round(qs)}% dalla rete (${nf(t.kwh_rete)} kWh)`
+    : '—';
+
+  document.getElementById('vAuto').textContent = eur(c.gasolio_per_kwh);
+  document.getElementById('vAutoSub').textContent = `${c.km_per_kwh} km con 1 kWh${c.misurato ? ' ✓ misurato' : ''}`;
+  document.getElementById('vCasa').textContent = eur(c.prezzo_energia);
+  document.getElementById('vRete').textContent = eur(D.prezzi.vendita);
+
+  const volte = (c.gasolio_per_kwh / (c.prezzo_energia || 0.18)).toFixed(1);
+  document.getElementById('infoAmm').innerHTML =
+    `Un kWh messo nell'auto vale <b>${volte} volte</b> lo stesso kWh usato in casa. ` +
+    `Nella barra dell'ammortamento del fotovoltaico entra però solo il <b>di più</b> — ` +
+    `${eur(c.gasolio_per_kwh - c.prezzo_energia)}/kWh sui soli kWh presi dal sole — perché quei kWh ` +
+    `sono <b>già contati</b> come autoconsumo. Finora: <b>${eur0(D.totali.delta_ammortamento)}</b>. ` +
+    `I kWh comprati di notte restano fuori: sono risparmio sul gasolio, non recupero dell'impianto.`;
+
+  disegna();
+  lista(ses);
+  const km = D.totali.km_reali;
+  const cr = D.consumo_reale;
+  document.getElementById('odoNota').innerHTML = (cr && cr.valido)
+    ? `✓ <b>Consumo reale misurato: ${nf(cr.kwh_100km)} kWh/100 km</b> — su ${nf(cr.km, 0)} km veri e ` +
+      `${nf(cr.kwh)} kWh caricati. Tutti i conti qui sopra usano questo, non il valore dichiarato.`
+    : cr
+    ? `⚠️ I conti non tornano: ${nf(cr.km, 0)} km con ${nf(cr.kwh)} kWh farebbero ${nf(cr.kwh_100km)} kWh/100 km — ` +
+      `${cr.motivo} Continuo a usare il valore dichiarato (${D.config.consumo_kwh_100km} kWh/100 km).`
+    : (D.km_log.length
+        ? `Ultimo inserimento: ${D.km_log[D.km_log.length - 1].odometro.toLocaleString('it-IT')} km il ${D.km_log[D.km_log.length - 1].data}` +
+          (km ? ` · ${nf(km, 0)} km percorsi da quando registri` : '') +
+          ` · <i>con una seconda lettura distante almeno 200 km calcolo il consumo vero</i>`
+        : 'Bastano due letture ogni tanto: da lì ricavo il consumo reale e i conti si tarano da soli.');
+  const sc = D.totali.scartate;
+  document.getElementById('foot').innerHTML = sc
+    ? `${sc} ${sc === 1 ? 'rilevazione scartata' : 'rilevazioni scartate'} a mano, ${sc === 1 ? 'esclusa' : 'escluse'} dai conti.`
+    : 'Le ricariche sono ricostruite dai consumi dell\'impianto: controllale e scarta quelle sbagliate.';
+}
+
+function disegna() {
+  const mesi = D.mesi;
+  const lab = mesi.map(m => {
+    const [y, mm] = m.ym.split('-');
+    return ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'][+mm - 1] + " '" + y.slice(2);
+  });
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), {
+    type: 'bar',
+    data: {
+      labels: lab,
+      datasets: [
+        { label: 'dal sole', data: mesi.map(m => +m.kwh_sole.toFixed(1)), backgroundColor: '#f5b427', borderRadius: 5, stack: 'k' },
+        { label: 'dalla rete', data: mesi.map(m => +m.kwh_rete.toFixed(1)), backgroundColor: '#5b7a99', borderRadius: 5, stack: 'k' },
+        { label: 'speso €', data: mesi.map(m => +m.costo.toFixed(2)), type: 'line', borderColor: '#e2606a',
+          backgroundColor: 'rgba(226,96,106,.1)', borderWidth: 2, pointRadius: 3, yAxisID: 'y2', tension: .3 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#90a2b6', font: { size: 11 }, boxWidth: 12 } } },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#90a2b6', font: { size: 10 } } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#90a2b6', font: { size: 10 } }, title: { display: true, text: 'kWh', color: '#90a2b6', font: { size: 10 } } },
+        y2: { position: 'right', grid: { display: false }, ticks: { color: '#e2606a', font: { size: 10 }, callback: v => '€' + v } },
+      },
+    },
+  });
+}
+
+function lista(ses) {
+  const el = document.getElementById('sessioni');
+  document.getElementById('sesCount').textContent = ses.length ? `(${ses.length})` : '';
+  if (!ses.length) {
+    el.innerHTML = `<div class="empty">Nessuna ricarica rilevata in questo periodo.<br>
+      Le ricariche vengono riconosciute dal carico costante sull'impianto: servono almeno 45 minuti attaccati.</div>`;
+    return;
+  }
+  el.innerHTML = ses.map(s => {
+    const d = new Date(s.inizio.replace(' ', 'T') + 'Z');
+    const qs = s.kwh ? Math.round(s.kwh_sole / s.kwh * 100) : 0;
+    const src = s.source === 'vw' ? '🚗 dall\'auto' : s.source === 'manuale' ? '✍️ a mano' : '📈 stimata';
+    return `<div class="ses ${s.stato === 'ok' ? 'ok' : 'stima'}">
+      <div>
+        <div class="nm">${d.toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric', month: 'short' })}
+          <span style="color:var(--mut);font-weight:400">${s.inizio.slice(11, 16)}–${s.fine.slice(11, 16)}</span></div>
+        <div class="meta">${nf(s.ore)} h a ${nf(s.kw_medi)} kW · ${qs}% sole · ${src}</div>
+      </div>
+      <div class="rt"><div class="e">${nf(s.kwh)} kWh</div><div class="k">${nf(s.km, 0)} km · ${eur(s.risparmio)}</div></div>
+      <div class="acts">
+        <button class="yes ${s.stato === 'ok' ? 'on' : ''}" title="confermo" onclick="stato('${s.id}','${s.stato === 'ok' ? 'auto' : 'ok'}')">✓</button>
+        <button class="no" title="non era l'auto" onclick="stato('${s.id}','no')">✕</button>
+      </div></div>`;
+  }).join('');
+}
+
+async function post(url, body) {
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+async function stato(id, s) {
+  try { await post('api/saveAutoSessione', { id, stato: s }); await carica(); }
+  catch (e) { alert('Non salvato: ' + e.message); }
+}
+async function salvaKm() {
+  const v = parseFloat(document.getElementById('odo').value);
+  if (!v) return;
+  try {
+    await post('api/saveAutoKm', { data: new Date().toISOString().slice(0, 10), odometro: v });
+    document.getElementById('odo').value = ''; await carica();
+  } catch (e) { alert('Non salvato: ' + e.message); }
+}
+async function salvaConfig() {
+  const p = {
+    consumo_kwh_100km: document.getElementById('cConsumo').value,
+    batteria_kwh: document.getElementById('cBatt').value,
+    wallbox_kw: document.getElementById('cWb').value,
+    km_litro_sostituita: document.getElementById('cKml').value,
+    prezzo_gasolio: document.getElementById('cGas').value,
+    data_inizio: document.getElementById('cData').value,
+  };
+  try { await post('api/saveAutoConfig', p); await carica(); }
+  catch (e) { alert('Non salvato: ' + e.message); }
+}
+
+document.getElementById('seg').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...document.querySelectorAll('#seg button')].forEach(x => x.classList.toggle('on', x === b));
+  periodo = b.dataset.p; render();
+});
+
+carica();
+</script>
+</body>
+</html>

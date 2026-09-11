@@ -268,20 +268,39 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 
 </div>
 <script>
-// ===================== APPS SCRIPT API =====================
-const GAS_API = 'https://script.google.com/macros/s/AKfycbxXVLk-UsEycb1ItdqnjGqdmIULCTazUbVf1SE7xK8184eDrVWT4FwBcddtP_sUrfY9Ug/exec';
+// ===================== MOTORE LOCALE (solar.json) =====================
+// Sostituisce le chiamate a Google Apps Script con letture del file locale
+// prodotto da solar-fetch.mjs. Zero dipendenza da script.google.com => nessun ritardo.
+const MESI_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+function ymToAnnoMese(ym){ const p = String(ym).split('-'); return { anno:+p[0], mese:MESI_IT[+p[1]-1] }; }
+async function loadSolar(){ const r = await fetch('solar.json?_=' + Date.now()); return await r.json(); }
 
 async function gasGet(action, params = {}) {
-  const url = new URL(GAS_API);
-  url.searchParams.set('action', action);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
   try {
-    const res = await fetch(url.toString());
-    return await res.json();
-  } catch (e) {
-    console.warn('GAS API error [' + action + ']:', e);
-    return null;
-  }
+    const s = await loadSolar();
+    const M = s.monthly || [];
+    switch (action) {
+      case 'live':
+        return s.live;
+      case 'history':
+        return (s.live24h && s.live24h.length) ? s.live24h
+          : (s.daily || []).map(d => ({ timestamp:d.date, powerpv:0, powerbatt:0, powergrid:0, powerhouse:0, percentbattery:0, energy_pv:d.energy_pv, self_sufficiency:d.self_sufficiency }));
+      case 'monthly': // solo mesi realmente misurati dall'inverter (come getDeliosMonthly)
+        // ⚠️ 11/09/2026: anche 'delios-auto' è dato dell'inverter (import automatico).
+        //    Con l'uguaglianza esatta agosto e settembre restavano fuori dal grafico.
+        return M.filter(r => String(r.source || '').startsWith('delios')).map(r => ({ ...ymToAnnoMese(r.ym), produzione:r.produzione, autoconsumo:r.autoconsumo, da_rete:r.da_rete, immessa:r.immessa }));
+      case 'loadMensile2026':
+        return M.filter(r => r.anno === 2026).map(r => ({ ...ymToAnnoMese(r.ym), produzione:r.produzione, autoconsumo:r.autoconsumo, da_rete:r.da_rete, immessa:r.immessa, kwh_eff:r.kwh_eff, materia:r.materia, gse:r.gse, bolletta:r.bolletta }));
+      case 'prices':
+        return s.prices || { acquisto:0.18, vendita:0.10 };
+      case 'savePrices':
+      case 'saveMensile2026': // scrittura: al server locale (endpoint Tappa 2b); best-effort
+        try { await fetch('api/' + action, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(params) }); } catch (e) {}
+        return { ok:true };
+      default:
+        return null;
+    }
+  } catch (e) { console.warn('motore locale [' + action + ']', e); return null; }
 }
 // ============================================================
 
@@ -510,7 +529,7 @@ function saveMensileInput(key, field, value) {
 
   // Per mesi 2026+: salva anche su Sheets (fire-and-forget)
   const [yr, mes] = key.split('-');
-  if (parseInt(yr) >= 2026) {
+  if (true) {
     const s = saved[key];
     const apiRow = apiMonthlyData ? apiMonthlyData.find(d => d.anno == yr && d.mese === mes) : null;
     const rawRow = rawData.find(d => d[0] == yr && d[1] === mes);

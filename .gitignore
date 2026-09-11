@@ -19,3 +19,6 @@ node_modules/
 data/*.json
 *.log
 data/storico.db
+
+# venv Python (libreria weconnect per la ID.3)
+.venv/
