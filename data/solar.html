@@ -422,6 +422,19 @@ function setAmmMode(m) {
 }
 
 // --- Ammortamento dinamico ---
+
+// Quanto vale UN kWh autoconsumato: il costo che NON paghiamo non prelevandolo dalla rete.
+// Non è la sola materia energia (sottostima: rete, oneri, accisa e IVA si evitano anche loro),
+// e non è il totale bolletta diviso i kWh (sovrastima: dentro ci sono ~31,69 €/mese di quota
+// fissa e quota potenza, che si pagano identici anche a consumo zero). È il COSTO MARGINALE.
+//   materia/kwh_eff → è la «QUOTA PER CONSUMI» della bolletta: già comprende rete e oneri variabili
+//   ACCISA          → «Imposta Erariale Resid. > 3kw», 0,0227 €/kWh, si paga con ogni fornitore
+//   IVA 10%         → utenza «Domestico residente», quindi NON detraibile: è un costo vero
+// Corretto l'11/09/2026: prima mancavano accisa e IVA e l'autoconsumo era sottostimato del 21,6%
+// (284 € sui soli otto mesi del 2026). Vedi [[feedback_costo_unitario_separa_i_fissi]].
+const ACCISA_KWH = 0.0227, IVA_LUCE = 1.10;
+const prezzoEvitato = (materia, kwh) => (materia / kwh + ACCISA_KWH) * IVA_LUCE;
+
 function updateAmmortamento() {
   const saved = getMensileSaved();
   // Baseline storica hardcoded: Σ d[7] rawData 2022-2025 + rimborsi una tantum passati
@@ -445,7 +458,7 @@ function updateAmmortamento() {
       if (s.kwh_eff > 0 && s.materia > 0) {
         const rawRow = rawData.find(d => d[0]+'-'+d[1] === key);
         if (rawRow && rawRow[6] > 0) {
-          const newAuto = rawRow[6] * (s.materia / s.kwh_eff);
+          const newAuto = rawRow[6] * prezzoEvitato(s.materia, s.kwh_eff);
           autoAmt = newAuto - (rawRow[7] || 0); // delta vs valore hardcoded in BASE
           autoDisplay = newAuto;                 // valore pieno per il display
         }
@@ -456,7 +469,7 @@ function updateAmmortamento() {
         const [yr, mes] = key.split('-');
         const src = (apiMonthlyData && apiMonthlyData.find(d => d.anno == yr && d.mese === mes))
                  || sheetsMonthly2026.find(d => d.anno == yr && d.mese === mes);
-        if (src) { autoAmt = src.autoconsumo * (s.materia / s.kwh_eff); autoDisplay = autoAmt; }
+        if (src) { autoAmt = src.autoconsumo * prezzoEvitato(s.materia, s.kwh_eff); autoDisplay = autoAmt; }
       }
     }
 
