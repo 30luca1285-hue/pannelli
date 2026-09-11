@@ -418,7 +418,16 @@ const prezzoEvitato = (materia, kwh) => (materia / kwh + ACCISA_KWH) * IVA_LUCE;
 
 function updateAmmortamento() {
   const saved = getMensileSaved();
-  // Baseline storica hardcoded: Σ d[7] rawData 2022-2025 + rimborsi una tantum passati
+  // Baseline storica hardcoded. COSA C'È DENTRO (chiarito da Luca l'11/09/2026, prima non era
+  // scritto da nessuna parte e valeva un terzo del recuperato):
+  //   · Σ d[7] di rawData 2022-2025 — l'autoconsumo valorizzato, ora al costo marginale vero
+  //     delle bollette di ogni mese (vedi ricalcola-storico-ammortamento.mjs)
+  //   · ~1.600 € di contributi GSE in conto scambio degli anni passati (convenzione SSP00895981,
+  //     aperta il 26/05/2022): non sono nella sezione GSE mensile, che parte da giugno 2026
+  //   · ~3.870 € di carburante evitato con una PRECEDENTE auto elettrica, ricaricata col sole
+  // ⚠️ Quest'ultima voce sta qui dentro, quindi è contata anche in modalità «SOLO ENERGIA»,
+  //    mentre la mobilità della Born è separata (`mob`, solo il delta sul gasolio, vedi sotto).
+  //    Luca l'11/09/2026: «prendili per buoni quei soldi» → si lascia così, non si scorpora.
   // (2026+ non inclusi: vivono su Mensile_2026 e vengono calcolati dinamicamente)
   const BASE = 14976.741; // Σ d[7] rawData 2022-2025 (autoconsumo al COSTO MARGINALE per 2024-2025, dalle bollette vere — vedi ricalcola-storico-ammortamento.mjs) + GSE e rimborsi una tantum
   const rawKeys = new Set(rawData.map(d => d[0]+'-'+d[1]));
