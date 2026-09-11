@@ -35,7 +35,7 @@ async function gasGet(action, params = {}) {
       case 'loadMensile2026':
         return M.filter(r => r.anno === 2026).map(r => ({ ...ymToAnnoMese(r.ym), produzione:r.produzione, autoconsumo:r.autoconsumo, da_rete:r.da_rete, immessa:r.immessa, kwh_eff:r.kwh_eff, materia:r.materia, gse:r.gse, bolletta:r.bolletta }));
       case 'prices':
-        return s.prices || { acquisto:0.18, vendita:0.10 };
+        return s.prices || { acquisto:0.1865, vendita:0.10 };
       case 'savePrices':
       case 'saveMensile2026': // scrittura: al server locale (endpoint Tappa 2b); best-effort
         try { await fetch('api/' + action, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(params) }); } catch (e) {}
