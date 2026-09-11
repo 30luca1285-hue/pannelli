@@ -8,9 +8,11 @@
  * 0,2210 e 0,2933. Sottostima: **1.180 € su due anni**.
  * Stesso errore già corretto per il 2026 (dove il prezzo arriva dalla bolletta inserita).
  *
- * ⛔ 2022-2023 NON si toccano: lo sportello Astea tiene solo dal 2024, quelle bollette non ci sono.
- *    I prezzi cablati di quegli anni (0,4107 e 0,2644) sono già alti — è il caro-bollette — e non
- *    ho modo di verificarli. Meglio lasciarli che sostituirli con una stima.
+ * ✅ AGGIORNATO lo stesso giorno: anche 2022-2023 si correggono. Prima dell'01/01/2024 il fornitore
+ *    non era Astea ma **FUTURA ENERGIE** (ricordato da Luca), e quelle bollette arrivavano **in
+ *    allegato alle email**: 26 recuperate dalla casella con `HQ/scripts/scarica-bollette-futura.py`.
+ * ⛔ Restano fuori **ottobre-dicembre 2023**: dal 01/09/2023 il contratto è stato ceduto a **TUA
+ *    srl** e quelle bollette non sono in casella. Per quei mesi il valore cablato resta com'è.
  *
  * Uso:
  *   node ricalcola-storico-ammortamento.mjs          → mostra cosa cambierebbe, NON scrive
@@ -24,19 +26,31 @@ const DIR = path.dirname(new URL(import.meta.url).pathname);
 const HTML = path.join(DIR, 'index.html');
 const BOLLETTE = '/Users/lucagalluzzi/Projects/HQ/data/bollette-luce';
 const LETTORE = '/Users/lucagalluzzi/Projects/HQ/scripts/leggi-bolletta-luce.py';
+const LETTORE_FUTURA = '/Users/lucagalluzzi/Projects/HQ/scripts/leggi-bolletta-futura.py';
 const scrivi = process.argv.includes('--scrivi');
 
-// ── 1. i marginali veri, dalle bollette
-const pdf = execFileSync('bash', ['-c', `ls -1 ${BOLLETTE}/*.pdf`], { encoding: 'utf8' })
-  .trim().split('\n');
-const bollette = JSON.parse(execFileSync('python3', [LETTORE, '--json', ...pdf], {
-  encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
-}));
+// ── 1. i marginali veri, dalle bollette. Due fornitori, due lettori diversi.
 const marginale = new Map();
-for (const b of bollette) {
-  if (b.marginale && b.anno && b.mese) marginale.set(`${b.anno}-${b.mese}`, b.marginale);
-}
-console.log(`bollette lette: ${bollette.length} · con marginale calcolabile: ${marginale.size}\n`);
+const fonte = new Map();
+const leggi = (script, file, etichetta) => {
+  if (!file.length) return 0;
+  const out = JSON.parse(execFileSync('python3', [script, '--json', ...file], {
+    encoding: 'utf8', maxBuffer: 32 * 1024 * 1024,
+  }));
+  let n = 0;
+  for (const b of [].concat(out)) {
+    if (b.marginale && b.anno && b.mese) {
+      marginale.set(`${b.anno}-${b.mese}`, b.marginale);
+      fonte.set(`${b.anno}-${b.mese}`, etichetta);
+      n++;
+    }
+  }
+  return n;
+};
+const tutti = execFileSync('bash', ['-c', `ls -1 ${BOLLETTE}/*.pdf`], { encoding: 'utf8' }).trim().split('\n');
+const nAstea = leggi(LETTORE, tutti.filter(f => f.includes('astea')), 'Astea');
+const nFutura = leggi(LETTORE_FUTURA, tutti.filter(f => f.includes('futura')), 'Futura');
+console.log(`marginali disponibili: ${nAstea} da Astea (2024→) · ${nFutura} da Futura (2021-2023)\n`);
 
 // ── 2. le righe di rawData
 const html = readFileSync(HTML, 'utf8');
@@ -55,7 +69,7 @@ const nuove = righe.map(riga => {
   sommaVecchia += valoreVecchio || 0;
 
   const p = marginale.get(`${anno}-${mese}`);
-  if (!p || !autoconsumo || anno === '2022' || anno === '2023') {
+  if (!p || !autoconsumo) {
     sommaNuova += valoreVecchio || 0;
     return riga;                            // fuori portata: lasciata com'è
   }
@@ -65,6 +79,7 @@ const nuove = righe.map(riga => {
   console.log(`  ${anno} ${mese.padEnd(10)} ${String(autoconsumo).padStart(5)} kWh · ` +
     `${(valoreVecchio / autoconsumo).toFixed(4)} → ${p.toFixed(4)} €/kWh · ` +
     `${valoreVecchio.toFixed(2)} → ${valoreNuovo.toFixed(2)} € ` +
+    `[${fonte.get(`${anno}-${mese}`)}] ` +
     `(${valoreNuovo - valoreVecchio > 0 ? '+' : ''}${(valoreNuovo - valoreVecchio).toFixed(2)})`);
 
   campi[5] = valoreNuovo;
