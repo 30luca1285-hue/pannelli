@@ -206,7 +206,7 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 <div id="tab-live" class="panel active">
 <div class="live-status"><div class="live-dot"></div><div class="live-status-text">Dati dal portale Delios · Aggiornamento ogni 15 min · <span id="liveTimestamp">In attesa...</span></div></div>
 <div class="price-bar">
-<label>💰 Acquisto: <input type="number" id="price-acquisto" step="0.01" min="0" value="0.28"> <span class="price-unit">€/kWh</span></label>
+<label>💰 Acquisto: <input type="number" id="price-acquisto" step="0.001" min="0" value="0.1865"> <span class="price-unit">€/kWh</span></label>
 <label>💸 Vendita: <input type="number" id="price-vendita" step="0.01" min="0" value="0.10"> <span class="price-unit">€/kWh</span></label>
 <span class="price-saved" id="priceSaved">Salvato!</span>
 </div>
@@ -292,7 +292,7 @@ async function gasGet(action, params = {}) {
       case 'loadMensile2026':
         return M.filter(r => r.anno === 2026).map(r => ({ ...ymToAnnoMese(r.ym), produzione:r.produzione, autoconsumo:r.autoconsumo, da_rete:r.da_rete, immessa:r.immessa, kwh_eff:r.kwh_eff, materia:r.materia, gse:r.gse, bolletta:r.bolletta }));
       case 'prices':
-        return s.prices || { acquisto:0.18, vendita:0.10 };
+        return s.prices || { acquisto:0.1865, vendita:0.10 };
       case 'savePrices':
       case 'saveMensile2026': // scrittura: al server locale (endpoint Tappa 2b); best-effort
         try { await fetch('api/' + action, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(params) }); } catch (e) {}
@@ -727,7 +727,7 @@ function updateLiveUI(data) {
   document.getElementById('live-gridcons').textContent = Number(data.energy_grid_consumed).toFixed(1);
   document.getElementById('live-gridfeed').textContent = Math.abs(Number(data.energy_grid_feed_in)).toFixed(1);
   // Prezzi energia (letti dagli input editabili)
-const prezzoAcquisto = parseFloat(document.getElementById('price-acquisto').value) || 0.28;
+const prezzoAcquisto = parseFloat(document.getElementById('price-acquisto').value) || 0.1865;
 const prezzoVendita = parseFloat(document.getElementById('price-vendita').value) || 0.10;
 
 const euroPV = Number(data.energy_pv) * prezzoAcquisto;

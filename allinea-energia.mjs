@@ -21,8 +21,17 @@
  * Uso:
  *   node allinea-energia.mjs                                  → mostra le differenze, non scrive
  *   node allinea-energia.mjs --scrivi                          → allinea il foglio al database
- *   node allinea-energia.mjs --bolletta Settembre 500 95.50    → registra una bolletta e allinea
- *                                                                (mese, kWh fatturati, € materia)
+ *   node allinea-energia.mjs --bolletta Settembre 500 95.50 180.20
+ *                                                              → registra una bolletta e allinea
+ *                                                                (mese, kWh fatturati, € quota consumi,
+ *                                                                 € TOTALE BOLLETTA — l'ultimo è facoltativo)
+ *
+ * 📄 DOVE SI LEGGONO I TRE NUMERI sulla bolletta Astea (verificato l'11/09/2026 sui PDF veri):
+ *   kWh e quota consumi → prima pagina, «QUOTA PER CONSUMI»: «1.269 kWh X 0,213656 €/kWh  271,13 €»
+ *   totale              → «TOTALE BOLLETTA», NON «TOTALE DA PAGARE»: i 9,00 € di differenza sono
+ *                         il canone RAI («Altre partite fuori fattura»), che non è energia.
+ *   ⚠️ la quota consumi NON comprende i 31,69 €/mese di fissi (11,92 quota fissa + 19,77 quota
+ *      potenza per 10 kW): quelli stanno solo nel totale. È per questo che serve anche il totale.
  */
 import { DatabaseSync } from 'node:sqlite';
 import path from 'node:path';
@@ -39,10 +48,10 @@ const iBolletta = args.indexOf('--bolletta');
 
 // ── 1. se c'è una bolletta da registrare, va nel DATABASE (la fonte), non sul foglio
 if (iBolletta >= 0) {
-  const [mese, kwh, euro] = args.slice(iBolletta + 1, iBolletta + 4);
+  const [mese, kwh, euro, totale] = args.slice(iBolletta + 1, iBolletta + 5);
   const meseOk = MESI.find(m => m.toLowerCase() === String(mese).toLowerCase());
   if (!meseOk || !kwh || !euro) {
-    console.error('Uso: --bolletta <Mese> <kWh fatturati> <€ materia energia>');
+    console.error('Uso: --bolletta <Mese> <kWh fatturati> <€ quota consumi> [€ totale bolletta]');
     process.exit(1);
   }
   const db = new DatabaseSync(DB);
@@ -52,10 +61,19 @@ if (iBolletta >= 0) {
     console.error(`⚠️ ${meseOk} ${ANNO} non è ancora nel database: l'inverter non ha chiuso il mese. Non scrivo.`);
     db.close(); process.exit(1);
   }
-  db.prepare('UPDATE solar_monthly SET kwh_eff = ?, materia = ? WHERE ym = ?')
-    .run(Number(kwh), Number(euro), ym);
+  // il totale è facoltativo: se non lo passo NON azzero quello già registrato
+  if (totale !== undefined) {
+    db.prepare('UPDATE solar_monthly SET kwh_eff = ?, materia = ?, bolletta = ? WHERE ym = ?')
+      .run(Number(kwh), Number(euro), Number(totale), ym);
+  } else {
+    db.prepare('UPDATE solar_monthly SET kwh_eff = ?, materia = ? WHERE ym = ?')
+      .run(Number(kwh), Number(euro), ym);
+  }
   db.close();
-  console.log(`✅ bolletta registrata nel database: ${meseOk} ${ANNO} — ${kwh} kWh, ${euro} € di materia (${(euro/kwh).toFixed(4)} €/kWh)\n`);
+  const quanto = totale !== undefined
+    ? `${kwh} kWh · ${euro} € di consumi · ${totale} € in bolletta = ${(Number(totale) / Number(kwh)).toFixed(4)} €/kWh tutto compreso`
+    : `${kwh} kWh, ${euro} € di consumi (${(euro / kwh).toFixed(4)} €/kWh)`;
+  console.log(`✅ bolletta registrata nel database: ${meseOk} ${ANNO} — ${quanto}\n`);
 }
 
 // ── 2. leggo la fonte
