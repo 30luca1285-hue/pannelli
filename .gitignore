@@ -22,3 +22,7 @@ data/storico.db
 
 # venv Python (libreria weconnect per la ID.3)
 .venv/
+
+# 24/09/2026: mai copie del codice Delios nel repo pubblico (una copia di backup conteneva la password del portale)
+**/DeliosAPI.gs*
+*.gs.snapshot
