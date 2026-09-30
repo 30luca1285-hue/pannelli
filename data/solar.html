@@ -268,39 +268,74 @@ header{flex-direction:column;gap:12px;margin-bottom:20px;padding-bottom:16px}
 
 </div>
 <script>
-// ===================== MOTORE LOCALE (solar.json) =====================
-// Sostituisce le chiamate a Google Apps Script con letture del file locale
-// prodotto da solar-fetch.mjs. Zero dipendenza da script.google.com => nessun ritardo.
+// ===================== APPS SCRIPT API =====================
+// 30/09/2026 — I dati li dà il MAC, non più Google. Google rispondeva in 2-20 s e a volte con
+// «Impossibile aprire il file» (misurato quel giorno: dati mensili e prezzi in errore). Sul Mac
+// solar-fetch.mjs scrive data/solar.json ogni 5 minuti e il server SOCIAL lo serve su /energia.
+// Stesso schema di Autoveicoli: questa pagina resta su GitHub Pages, i dati arrivano via Tailscale.
+// build-solar-html.mjs genera la copia servita dal Mac mettendo MAC_BASE = '' (percorsi relativi).
+const MAC_BASE = '';   // copia servita dal Mac: percorsi relativi
+// Google resta solo come RISERVA IN LETTURA se il Mac non risponde (es. telefono senza Tailscale).
+const GAS_API = 'https://script.google.com/macros/s/AKfycbxXVLk-UsEycb1ItdqnjGqdmIULCTazUbVf1SE7xK8184eDrVWT4FwBcddtP_sUrfY9Ug/exec';
 const MESI_IT = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
-function ymToAnnoMese(ym){ const p = String(ym).split('-'); return { anno:+p[0], mese:MESI_IT[+p[1]-1] }; }
-async function loadSolar(){ const r = await fetch('solar.json?_=' + Date.now()); return await r.json(); }
+function ymToAnnoMese(ym) { const p = String(ym).split('-'); return { anno: +p[0], mese: MESI_IT[+p[1] - 1] }; }
+function oraLocale(d) {
+  const z = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes()) + ':' + z(d.getSeconds());
+}
+// All'apertura l'app chiede cinque cose insieme: un solo download di solar.json le serve tutte.
+let _solar = null, _solarAt = 0;
+function loadSolar() {
+  if (_solar && Date.now() - _solarAt < 5000) return _solar;
+  _solarAt = Date.now();
+  _solar = fetch(MAC_BASE + 'solar.json?_=' + Date.now(), { cache: 'no-store' })
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    // a Mac spento la cache del telefono risponde «null» invece di dare errore: va trattato come errore
+    .then(j => { if (!j || !j.monthly) throw new Error('solar.json vuoto'); return j; });
+  _solar.catch(() => { _solar = null; });
+  return _solar;
+}
+async function gasRiserva(action, params) {
+  const url = new URL(GAS_API);
+  url.searchParams.set('action', action);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  try { const res = await fetch(url.toString()); return await res.json(); }
+  catch (e) { console.warn('anche Google non risponde [' + action + ']:', e); return null; }
+}
 
 async function gasGet(action, params = {}) {
+  // Le scritture vanno SOLO al Mac: è lì il database. Su Google non si scrive più.
+  if (action === 'savePrices' || action === 'saveMensile2026') {
+    _solar = null;   // la prossima lettura prende i valori appena salvati
+    try {
+      const r = await fetch(MAC_BASE + 'api/' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) });
+      return await r.json();
+    } catch (e) { console.warn('salvataggio sul Mac non riuscito [' + action + ']:', e); return null; }
+  }
   try {
     const s = await loadSolar();
     const M = s.monthly || [];
     switch (action) {
-      case 'live':
-        return s.live;
-      case 'history':
-        return (s.live24h && s.live24h.length) ? s.live24h
-          : (s.daily || []).map(d => ({ timestamp:d.date, powerpv:0, powerbatt:0, powergrid:0, powerhouse:0, percentbattery:0, energy_pv:d.energy_pv, self_sufficiency:d.self_sufficiency }));
-      case 'monthly': // solo mesi realmente misurati dall'inverter (come getDeliosMonthly)
-        // ⚠️ 11/09/2026: anche 'delios-auto' è dato dell'inverter (import automatico).
-        //    Con l'uguaglianza esatta agosto e settembre restavano fuori dal grafico.
-        return M.filter(r => String(r.source || '').startsWith('delios')).map(r => ({ ...ymToAnnoMese(r.ym), produzione:r.produzione, autoconsumo:r.autoconsumo, da_rete:r.da_rete, immessa:r.immessa }));
+      case 'live':   // solar.json non ha l'ora della lettura: è quella in cui il Mac l'ha scritto
+        return Object.assign({ timestamp: s.generatedAt ? oraLocale(new Date(s.generatedAt)) : 'N/A' }, s.live);
+      case 'history': {   // nel database l'ora è UTC: con la «Z» il telefono la mostra in ora italiana
+        const da = Date.now() - (+params.hours || 24) * 3600e3;
+        return (s.live24h || []).map(d => Object.assign({}, d, { timestamp: String(d.timestamp).replace(' ', 'T') + 'Z' }))
+          .filter(d => new Date(d.timestamp).getTime() >= da);
+      }
+      case 'monthly':   // solo i mesi misurati dall'inverter; 'delios-auto' è lo stesso dato, importato in automatico
+        return M.filter(r => String(r.source || '').startsWith('delios')).map(r => ({ ...ymToAnnoMese(r.ym), produzione: r.produzione, autoconsumo: r.autoconsumo, da_rete: r.da_rete, immessa: r.immessa }));
       case 'loadMensile2026':
-        return M.filter(r => r.anno === 2026).map(r => ({ ...ymToAnnoMese(r.ym), produzione:r.produzione, autoconsumo:r.autoconsumo, da_rete:r.da_rete, immessa:r.immessa, kwh_eff:r.kwh_eff, materia:r.materia, gse:r.gse, bolletta:r.bolletta }));
+        return M.filter(r => r.anno === 2026).map(r => ({ ...ymToAnnoMese(r.ym), produzione: r.produzione, autoconsumo: r.autoconsumo, da_rete: r.da_rete, immessa: r.immessa, kwh_eff: r.kwh_eff, materia: r.materia, gse: r.gse, bolletta: r.bolletta }));
       case 'prices':
-        return s.prices || { acquisto:0.1865, vendita:0.10 };
-      case 'savePrices':
-      case 'saveMensile2026': // scrittura: al server locale (endpoint Tappa 2b); best-effort
-        try { await fetch('api/' + action, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(params) }); } catch (e) {}
-        return { ok:true };
+        return s.prices || { acquisto: 0.1865, vendita: 0.10 };
       default:
         return null;
     }
-  } catch (e) { console.warn('motore locale [' + action + ']', e); return null; }
+  } catch (e) {
+    console.warn('Mac non raggiungibile [' + action + '], provo Google:', e);
+    return gasRiserva(action, params);
+  }
 }
 // ============================================================
 
@@ -412,7 +447,7 @@ let ammMode = 'ene';
 try { ammMode = localStorage.getItem('amm_mode') || 'ene'; } catch (e) {}
 
 async function loadAuto() {
-  try { autoData = await (await fetch('auto.json?_=' + Date.now())).json(); }
+  try { autoData = await (await fetch(MAC_BASE + 'auto.json?_=' + Date.now(), { cache: 'no-store' })).json(); }
   catch (e) { autoData = null; }
 }
 function setAmmMode(m) {

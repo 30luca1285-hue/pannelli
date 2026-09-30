@@ -1,4 +1,4 @@
-const CACHE = 'pannelli-v3';
+const CACHE = 'pannelli-v4';   // v4 (30/09/2026): i dati arrivano dal Mac, non più da Google
 const STATIC_ASSETS = [
   '/pannelli/',
   '/pannelli/index.html',
@@ -26,8 +26,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // API calls (Apps Script) → network first, fallback silenzioso
-  if (url.includes('script.google.com')) {
+  // Dati (dal Mac via Tailscale, o Google di riserva) → sempre dalla rete, mai in cache:
+  // hanno un ?_= diverso a ogni lettura e con «cache first» la cache sarebbe cresciuta all'infinito.
+  if (url.includes('script.google.com') || url.includes('.ts.net')) {
     e.respondWith(
       fetch(e.request).catch(() =>
         new Response(JSON.stringify(null), { headers: { 'Content-Type': 'application/json' } })
