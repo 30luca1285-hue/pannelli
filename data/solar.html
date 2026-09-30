@@ -288,7 +288,10 @@ let _solar = null, _solarAt = 0;
 function loadSolar() {
   if (_solar && Date.now() - _solarAt < 5000) return _solar;
   _solarAt = Date.now();
-  _solar = fetch(MAC_BASE + 'solar.json?_=' + Date.now(), { cache: 'no-store' })
+  // Mai «In attesa…» all'infinito: se il Mac non risponde in 8 s si passa alla riserva.
+  // (Chrome sul computer, finché non si tocca «Consenti» per la rete locale, lascia la richiesta appesa.)
+  const stop = new AbortController(); setTimeout(() => stop.abort(), 8000);
+  _solar = fetch(MAC_BASE + 'solar.json?_=' + Date.now(), { cache: 'no-store', signal: stop.signal })
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
     // a Mac spento la cache del telefono risponde «null» invece di dare errore: va trattato come errore
     .then(j => { if (!j || !j.monthly) throw new Error('solar.json vuoto'); return j; });
